@@ -42,7 +42,8 @@ def get_sessions(cookies, storage):
 
 
 def app(config):
-    # username password
+    logging.info("parse config")
+
     username = config["bbdc"]["username"]
     password = config["bbdc"]["password"]
 
@@ -53,15 +54,19 @@ def app(config):
 
     # chrome host
     chrome_host = config["chromedriver"]["host"]
-    implicit_wait = 5
+
+    # implicit_wait = 5
+    # browser.implicitly_wait(implicit_wait)
 
     # connect to chrome
+    logging.info("connect to selenium")
     browser = webdriver.Remote(
         '{:}/wd/hub'.format(chrome_host), DesiredCapabilities.CHROME)
     browser.get('https://booking.bbdc.sg/#/login?redirect=%2Fbooking%2Findex')
 
     try:
         # login BBDC
+        logging.info("login")
         idLogin = browser.find_element_by_id('input-8')
         idLogin.send_keys(username)
         idLogin = browser.find_element_by_id('input-15')
@@ -73,12 +78,14 @@ def app(config):
         browser.switch_to.default_content()
 
         # click practical button
-        browser.implicitly_wait(implicit_wait)
+        sleep(20)
+        logging.info("click practical button")
         practical = browser.find_element_by_xpath(
             '//*[@id="app"]/div/div/main/div/div/div[2]/div/div[1]/div/div/div[1]/div/div[2]/div/div[2]')
         practical.click()
 
-        browser.implicitly_wait(implicit_wait)
+        sleep(5)
+        logging.info("click booking button")
         book_next = browser.find_element_by_xpath(
             '/html/body/div[1]/div/div/main/div/div/div[2]/div/div[1]/div/div/div[2]/div/div[2]/div[1]/div[1]/div/button')
         book_next.click()
@@ -94,45 +101,59 @@ def app(config):
         # sessions = get_sessions(browser.get_cookies(), browser.execute_script("return window.localStorage;"))
 
         # parse calendar
-        browser.implicitly_wait(implicit_wait)
-        calendar = browser.find_element_by_xpath(
-            '/html/body/div[1]/div/div/main/div/div/div[2]/div/div[2]/div[1]/div[1]/div[1]/div[4]/div/div/div')
-        new_availible_days = []
-        for day in calendar.find_elements_by_class_name('v-btn__content'):
-            logging.info(day.text)
-            if day.text not in known_days:
-                new_availible_days.append(day.text)
-                known_days[day.text] = True
-                logging.info(f"New day found: {day.text}")
-            day.click()
-
-        # send message to telegram
-        logging.info(f"New days found: {new_availible_days}")
-        if len(new_availible_days) > 0 and enable_bot:
-            send_message(bot_token, chat_id, f"New days found: {new_availible_days}")
-
-        # parse slots
-        browser.implicitly_wait(implicit_wait)
-        slots = browser.find_element_by_class_name('slotContent')
-        sessions = slots.find_elements_by_class_name('sessionList')
-
-        for session in sessions:
-            date = session.find_element_by_class_name('left').text
-            cards = session.find_elements_by_class_name('sessionCard')
-
-            for card in cards:
-                if card.text == "":
-                    continue
-
-                name, time, cost = card.text.splitlines()
-                if f'{date} {time}' not in known_sessions:
-                    known_sessions[f'{date} {time}'] = True
-                    logging.info(f"New session found: {date} {time}")
-                    if enable_bot:
-                        send_message(bot_token, chat_id, f"New session found: {date} {time}")
+        while True:
+            logging.info("parsing calendar...")
+            parse_calendar(bot_token, browser, chat_id, enable_bot)
+            logging.info("wait for 30-120 seconds before refresh...")
+            # sleep(random.randint(30, 120))
+            logging.info("refreshing...")
+            browser.refresh()
 
     except Exception as e:
         logging.exception(e)
         raise
     finally:
         browser.quit()
+
+
+def parse_calendar(bot_token, browser, chat_id, enable_bot):
+    sleep(random.randint(10, 20))
+    calendar = browser.find_element_by_xpath(
+        '/html/body/div[1]/div/div/main/div/div/div[2]/div/div[2]/div[1]/div[1]/div[1]/div[4]/div/div/div')
+    days_to_notify = []
+    new_known_days = {}
+    for day in calendar.find_elements_by_class_name('v-btn__content'):
+        logging.info(f"Day found: {day.text}")
+        new_known_days[day.text] = True
+        if day.text not in known_days:
+            days_to_notify.append(day.text)
+            logging.warning(f"[NEW] New day found: {day.text}")
+        day.click()
+        sleep(random.randint(1, 3))
+
+    known_days.clear()
+    known_days.update(new_known_days)
+
+    # send message to telegram
+    logging.info(f"New days found: {days_to_notify}")
+    if len(days_to_notify) > 0 and enable_bot:
+        send_message(bot_token, chat_id, f"New days found: {days_to_notify}")
+    # parse slots
+    sessions = browser.find_elements_by_class_name('sessionList')
+    new_known_sessions = {}
+
+    for s in sessions:
+        if s.text == '':  # skip empty blocks
+            continue
+
+        date, total, name, time, cost = s.text.splitlines()
+        logging.info(f"Session found: {date} {time}")
+        if f'{date} {time}' not in known_sessions:
+            known_sessions[f'{date} {time}'] = True
+            logging.warning(f"[NEW] New session found: {date} {time}")
+            if enable_bot:
+                send_message(bot_token, chat_id, f"New session found: {date} {time}")
+        new_known_sessions[f'{date} {time}'] = True
+
+    known_sessions.clear()
+    known_sessions.update(new_known_sessions)
