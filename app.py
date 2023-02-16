@@ -66,13 +66,7 @@ def app(config):
 
     try:
         # login BBDC
-        logging.info("login")
-        idLogin = browser.find_element_by_id('input-8')
-        idLogin.send_keys(username)
-        idLogin = browser.find_element_by_id('input-15')
-        idLogin.send_keys(password)
-        loginButton = browser.find_element_by_class_name('v-btn')
-        loginButton.click()
+        login(browser, password, username)
 
         # proceed unsure form (Chrome)
         browser.switch_to.default_content()
@@ -83,12 +77,6 @@ def app(config):
         practical = browser.find_element_by_xpath(
             '//*[@id="app"]/div/div/main/div/div/div[2]/div/div[1]/div/div/div[1]/div/div[2]/div/div[2]')
         practical.click()
-
-        sleep(5)
-        logging.info("click booking button")
-        book_next = browser.find_element_by_xpath(
-            '/html/body/div[1]/div/div/main/div/div/div[2]/div/div[1]/div/div/div[2]/div/div[2]/div[1]/div[1]/div/button')
-        book_next.click()
 
         # if have booked lesson, click continue
         try:
@@ -103,23 +91,80 @@ def app(config):
         # parse calendar
         while True:
             logging.info("parsing calendar...")
-            parse_calendar(bot_token, browser, chat_id, enable_bot)
-            logging.info("wait for 30-120 seconds before refresh...")
-            # sleep(random.randint(30, 120))
+            parse_and_notify(bot_token, browser, chat_id)
+            logging.info("wait for 30-150 seconds before refresh...")
+            sleep(random.randint(30, 150))
             logging.info("refreshing...")
             browser.refresh()
 
     except Exception as e:
         logging.exception(e)
+        send_message(bot_token, chat_id, f"[Error]\n{e}")
         raise
     finally:
         browser.quit()
 
 
-def parse_calendar(bot_token, browser, chat_id, enable_bot):
+def login(browser, password, username):
+    logging.info("login")
+    idLogin = browser.find_element_by_id('input-8')
+    idLogin.send_keys(username)
+    idLogin = browser.find_element_by_id('input-15')
+    idLogin.send_keys(password)
+    loginButton = browser.find_element_by_class_name('v-btn')
+    loginButton.click()
+
+
+def parse_and_notify(bot_token, browser, chat_id):
+    sleep(5)
+    logging.info("click booking button")
+    # i tried to use xpath but it's not working, there 5 objects with the same xpath, the last on should be the booking button
+    book_next = browser.find_elements_by_xpath(
+        '//button[@class="v-btn v-btn--is-elevated v-btn--has-bg theme--light v-size--default primary"]')[-1] # todo find correct xpath
+    book_next.click()
+    header = book_next.text # todo: header should be the lesson name, not the button text
+    logging.info(f"choose lesson: {header}")
     sleep(random.randint(10, 20))
+    days = get_new_available_days(browser)
+    logging.info(f"New days found: {days}")
+    if len(days) > 0:
+        send_message(bot_token, chat_id, f"{header} \n New days found: {days}")
+
+    slots = get_new_available_slots(browser)
+    logging.info(f"New slots found: {slots}")
+
+
+
+    if len(slots) > 0:
+        send_message(bot_token, chat_id, f"{header} \n New slots found:\n{''.join(slots)}")
+
+
+def get_new_available_slots(browser):
+    sessions = browser.find_elements_by_class_name('sessionList')
+    new_known_sessions = {}
+    sessions_to_notify = []
+    for s in sessions:
+        if s.text == '':  # skip empty blocks
+            continue
+
+        date, total, name, time, cost = s.text.splitlines()
+        logging.info(f"Session found: {date} {time}")
+        if f'{date} {time}' not in known_sessions:
+            known_sessions[f'{date} {time}'] = True
+            logging.warning(f"[NEW] New session found: {date} {time}")
+            sessions_to_notify.append(f"{date} {time}\n")
+        new_known_sessions[f'{date} {time}'] = True
+
+    # refresh known sessions
+    known_sessions.clear()
+    known_sessions.update(new_known_sessions)
+    return sessions_to_notify
+
+
+def get_new_available_days(browser):
     calendar = browser.find_element_by_xpath(
         '/html/body/div[1]/div/div/main/div/div/div[2]/div/div[2]/div[1]/div[1]/div[1]/div[4]/div/div/div')
+
     days_to_notify = []
     new_known_days = {}
     for day in calendar.find_elements_by_class_name('v-btn__content'):
@@ -131,29 +176,7 @@ def parse_calendar(bot_token, browser, chat_id, enable_bot):
         day.click()
         sleep(random.randint(1, 3))
 
+    # refresh known days
     known_days.clear()
     known_days.update(new_known_days)
-
-    # send message to telegram
-    logging.info(f"New days found: {days_to_notify}")
-    if len(days_to_notify) > 0 and enable_bot:
-        send_message(bot_token, chat_id, f"New days found: {days_to_notify}")
-    # parse slots
-    sessions = browser.find_elements_by_class_name('sessionList')
-    new_known_sessions = {}
-
-    for s in sessions:
-        if s.text == '':  # skip empty blocks
-            continue
-
-        date, total, name, time, cost = s.text.splitlines()
-        logging.info(f"Session found: {date} {time}")
-        if f'{date} {time}' not in known_sessions:
-            known_sessions[f'{date} {time}'] = True
-            logging.warning(f"[NEW] New session found: {date} {time}")
-            if enable_bot:
-                send_message(bot_token, chat_id, f"New session found: {date} {time}")
-        new_known_sessions[f'{date} {time}'] = True
-
-    known_sessions.clear()
-    known_sessions.update(new_known_sessions)
+    return days_to_notify
