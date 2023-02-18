@@ -1,5 +1,6 @@
 import random
 from time import sleep
+from typing import List
 
 import requests
 from selenium import webdriver
@@ -39,28 +40,30 @@ class BBDCProcessor:
     def run(self):
         logging.info("parse and notify")
         try:
-            self.browser.get('https://booking.bbdc.sg/#/login?redirect=%2Fbooking%2Findex')
+            logging.info("login...")
             self._login()
+
+            logging.info(f"open practical tab...")
             self._open_practical_tab()
 
-            header = self._get_lesson_name()
-            logging.info(f"choose lesson: {header}")
+            lesson_name = self._get_lesson_name()
+            logging.info(f"choose lesson: {lesson_name}")
 
             days = self._get_new_available_days()
             logging.info(f"New days found: {days}")
             if len(days) > 0:
-                send_message(self._bot_token, self._chat_id, f"{header} \n New days found: {days}")
+                send_message(self._bot_token, self._chat_id, f"{lesson_name} \n New days found: {days}")
 
             # Wait for new available slots to be loaded
             slots = self._get_new_available_slots()
             logging.info(f"New slots found: {slots}")
             if len(slots) > 0:
-                send_message(self._bot_token, self._chat_id, f"{header} \n New slots found:\n{''.join(slots)}")
+                send_message(self._bot_token, self._chat_id, f"{lesson_name} \n New slots found:\n{''.join(slots)}")
 
             # parse calendar
             while True:
                 logging.info("parsing calendar...")
-                self._parse_and_notify()
+                self._open_slots()
                 logging.info("wait for 30-150 seconds before refresh...")
                 sleep(random.randint(30, 150))
                 logging.info("refreshing...")
@@ -74,18 +77,18 @@ class BBDCProcessor:
             self.browser.quit()
 
     def _login(self):
-        logging.info("login")
+        self.browser.get('https://booking.bbdc.sg/#/login?redirect=%2Fbooking%2Findex')
 
         # Wait for the login form to be loaded
         wait = WebDriverWait(self.browser, 10)
-        idLogin = wait.until(EC.presence_of_element_located((By.ID, 'input-8')))
-        idLogin.send_keys(self._username)
-        idPassword = wait.until(EC.presence_of_element_located((By.ID, 'input-15')))
-        idPassword.send_keys(self._password)
+        id_login = wait.until(EC.presence_of_element_located((By.ID, 'input-8')))
+        id_login.send_keys(self._username)
+        id_password = wait.until(EC.presence_of_element_located((By.ID, 'input-15')))
+        id_password.send_keys(self._password)
 
         # Wait for the login button to be clickable
-        loginButton = wait.until(EC.element_to_be_clickable((By.CLASS_NAME, 'v-btn')))
-        loginButton.click()
+        login_button = wait.until(EC.element_to_be_clickable((By.CLASS_NAME, 'v-btn')))
+        login_button.click()
         self.browser.switch_to.default_content()
 
     def _open_practical_tab(self):
@@ -97,7 +100,7 @@ class BBDCProcessor:
         logging.info("click practical button")
         practical.click()
 
-    def _parse_and_notify(self):
+    def _open_slots(self):
         wait = WebDriverWait(self.browser, 10)
         wait.until(EC.presence_of_element_located((By.XPATH,
                                                    '//button[@class="v-btn v-btn--is-elevated v-btn--has-bg theme--light v-size--default primary"]')))
@@ -115,7 +118,7 @@ class BBDCProcessor:
         except NoSuchElementException:
             logging.info("No continue button")
 
-    def _get_new_available_slots(self):
+    def _get_new_available_slots(self) -> List[str]:
         wait = WebDriverWait(self.browser, 10)
 
         wait.until(
@@ -142,7 +145,7 @@ class BBDCProcessor:
         known_sessions.update(new_known_sessions)
         return sessions_to_notify
 
-    def _get_new_available_days(self):
+    def _get_new_available_days(self) -> List[str]:
         wait = WebDriverWait(self.browser, 10)
 
         wait.until(
@@ -175,4 +178,3 @@ class BBDCProcessor:
         except NoSuchElementException:
             logging.info("No header for the lesson")
             return "Unknow lesson name"
-
