@@ -115,7 +115,6 @@ class BBDCProcessor:
         except NoSuchElementException:
             logging.info("No continue button")
 
-
     def _get_new_available_slots(self):
         wait = WebDriverWait(self.browser, 10)
 
