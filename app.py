@@ -38,26 +38,30 @@ class BBDCProcessor:
             '{:}/wd/hub'.format(chrome_host), DesiredCapabilities.CHROME)
 
     def run(self):
-        logging.info("parse and notify")
         try:
             logging.info("login...")
             self._login()
 
             logging.info(f"open practical tab...")
             self._open_practical_tab()
+
+            logging.info(f"open slots...")
             self._open_slots()
 
             # parse calendar every 30-150 seconds and send message if new slots are available
             while True:
+                # report with new days
                 logging.info("parsing calendar...")
                 days = self._get_new_available_days()
                 logging.info(f"New days found: {days}")
+
                 header = self._get_lesson_name()
                 logging.info(f"choose lesson: {header}")
+
                 if len(days) > 0:
                     send_message(self._bot_token, self._chat_id, f"{header} \n New days found: {days}")
 
-                # Wait for new available slots to be loaded
+                # detailed report with new slots
                 slots = self._get_new_available_slots()
                 logging.info(f"New slots found: {slots}")
                 if len(slots) > 0:
