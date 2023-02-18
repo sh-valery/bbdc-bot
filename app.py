@@ -45,25 +45,24 @@ class BBDCProcessor:
 
             logging.info(f"open practical tab...")
             self._open_practical_tab()
+            self._open_slots()
 
-            lesson_name = self._get_lesson_name()
-            logging.info(f"choose lesson: {lesson_name}")
-
-            days = self._get_new_available_days()
-            logging.info(f"New days found: {days}")
-            if len(days) > 0:
-                send_message(self._bot_token, self._chat_id, f"{lesson_name} \n New days found: {days}")
-
-            # Wait for new available slots to be loaded
-            slots = self._get_new_available_slots()
-            logging.info(f"New slots found: {slots}")
-            if len(slots) > 0:
-                send_message(self._bot_token, self._chat_id, f"{lesson_name} \n New slots found:\n{''.join(slots)}")
-
-            # parse calendar
+            # parse calendar every 30-150 seconds and send message if new slots are available
             while True:
                 logging.info("parsing calendar...")
-                self._open_slots()
+                days = self._get_new_available_days()
+                logging.info(f"New days found: {days}")
+                header = self._get_lesson_name()
+                logging.info(f"choose lesson: {header}")
+                if len(days) > 0:
+                    send_message(self._bot_token, self._chat_id, f"{header} \n New days found: {days}")
+
+                # Wait for new available slots to be loaded
+                slots = self._get_new_available_slots()
+                logging.info(f"New slots found: {slots}")
+                if len(slots) > 0:
+                    send_message(self._bot_token, self._chat_id, f"{header} \n New slots found:\n{''.join(slots)}")
+
                 logging.info("wait for 30-150 seconds before refresh...")
                 sleep(random.randint(30, 150))
                 logging.info("refreshing...")
@@ -147,14 +146,9 @@ class BBDCProcessor:
 
     def _get_new_available_days(self) -> List[str]:
         wait = WebDriverWait(self.browser, 10)
-
-        wait.until(
-            EC.presence_of_element_located((By.XPATH, '//div[contains(@class, "available-day__day__date")]')))
-
-        browser = self.browser
-        calendar = browser.find_element_by_xpath(
-            '/html/body/div[1]/div/div/main/div/div/div[2]/div/div[2]/div[1]/div[1]/div[1]/div[4]/div/div/div')
-
+        calendar = wait.until(
+            EC.presence_of_element_located((By.XPATH,
+                                            '/html/body/div[1]/div/div/main/div/div/div[2]/div/div[2]/div[1]/div[1]/div[1]/div[4]/div/div/div')))
         days_to_notify = []
         new_known_days = {}
         for day in calendar.find_elements_by_class_name('v-btn__content'):
@@ -165,7 +159,6 @@ class BBDCProcessor:
                 logging.warning(f"[NEW] New day found: {day.text}")
             day.click()
             sleep(random.randint(2, 4))
-
         # refresh known days
         known_days.clear()
         known_days.update(new_known_days)
