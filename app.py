@@ -22,7 +22,7 @@ known_sessions = {}
 
 class BBDCProcessor:
     def __init__(self, config):
-        logging.info("parse config")
+        logging.info("parse config...")
 
         self._username = config["bbdc"]["username"]
         self._password = config["bbdc"]["password"]
@@ -34,6 +34,8 @@ class BBDCProcessor:
         # connect to chrome
         logging.info("connect to selenium")
         chrome_host = config["chromedriver"]["host"]
+
+        logging.info(f"connecting to selenium host: {chrome_host}")
         self.browser = webdriver.Remote(
             '{:}/wd/hub'.format(chrome_host), DesiredCapabilities.CHROME)
 
