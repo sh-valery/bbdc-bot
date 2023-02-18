@@ -107,34 +107,39 @@ def app(config):
 
 def login(browser, password, username):
     logging.info("login")
-    idLogin = browser.find_element_by_id('input-8')
+
+    # Wait for the login form to be loaded
+    wait = WebDriverWait(browser, 10)
+    idLogin = wait.until(EC.presence_of_element_located((By.ID, 'input-8')))
     idLogin.send_keys(username)
-    idLogin = browser.find_element_by_id('input-15')
-    idLogin.send_keys(password)
-    loginButton = browser.find_element_by_class_name('v-btn')
+    idPassword = wait.until(EC.presence_of_element_located((By.ID, 'input-15')))
+    idPassword.send_keys(password)
+
+    # Wait for the login button to be clickable
+    loginButton = wait.until(EC.element_to_be_clickable((By.CLASS_NAME, 'v-btn')))
     loginButton.click()
 
 
 def parse_and_notify(bot_token, browser, chat_id):
-    sleep(5)
+    # Wait for the booking button to be clickable
+    wait = WebDriverWait(browser, 10)
+    book_next = wait.until(EC.element_to_be_clickable((By.XPATH, '//button[@class="v-btn v-btn--is-elevated v-btn--has-bg theme--light v-size--default primary"]')))
     logging.info("click booking button")
-    # i tried to use xpath but it's not working, there 5 objects with the same xpath, the last on should be the booking button
-    book_next = browser.find_elements_by_xpath(
-        '//button[@class="v-btn v-btn--is-elevated v-btn--has-bg theme--light v-size--default primary"]')[-1] # todo find correct xpath
     book_next.click()
     header = book_next.text # todo: header should be the lesson name, not the button text
     logging.info(f"choose lesson: {header}")
-    sleep(random.randint(10, 20))
+
+    # Wait for new available days to be loaded
+    wait.until(EC.presence_of_element_located((By.XPATH, '//div[contains(@class, "available-day__day__date")]')))
     days = get_new_available_days(browser)
     logging.info(f"New days found: {days}")
     if len(days) > 0:
         send_message(bot_token, chat_id, f"{header} \n New days found: {days}")
 
+    # Wait for new available slots to be loaded
+    wait.until(EC.presence_of_element_located((By.XPATH, '//div[contains(@class, "available-slot__item__time")]')))
     slots = get_new_available_slots(browser)
     logging.info(f"New slots found: {slots}")
-
-
-
     if len(slots) > 0:
         send_message(bot_token, chat_id, f"{header} \n New slots found:\n{''.join(slots)}")
 
@@ -174,7 +179,7 @@ def get_new_available_days(browser):
             days_to_notify.append(day.text)
             logging.warning(f"[NEW] New day found: {day.text}")
         day.click()
-        sleep(random.randint(1, 3))
+        sleep(random.randint(2, 4))
 
     # refresh known days
     known_days.clear()
