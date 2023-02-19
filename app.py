@@ -91,7 +91,7 @@ class BBDCProcessor:
 
                 except Exception as e:
                     logging.exception(e)
-                    send_message(self._bot_token, self._chat_id, f"[Error]\n{str(e)}")
+                    send_message(self._bot_token, self._chat_id, f"[Error]\n{str(e)}\nrefresh and sleep 60 seconds...")
                     self.browser.refresh()
                     sleep(60)
     def _login(self):
