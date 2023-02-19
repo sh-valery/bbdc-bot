@@ -186,7 +186,10 @@ class BBDCProcessor:
                                             '/html/body/div[1]/div/div/main/div/div/div[2]/div/div[2]/div[1]/div[1]/div[1]/div[4]/div/div/div')))
         days_to_notify = []
         new_known_days = {}
-        for day in calendar.find_elements(By.CLASS_NAME, 'v-btn__content'):
+        available_days = calendar.find_elements(By.CLASS_NAME, 'v-btn__content')
+        logging.info(f"days to check: {available_days}")
+
+        for day in available_days:
             logging.info(f"Day found: {day.text}")
             new_known_days[day.text] = True
             if day.text not in self.known_days:
