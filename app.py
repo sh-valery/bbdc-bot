@@ -154,7 +154,7 @@ class BBDCProcessor:
             logging.info("No continue button")
 
     def _get_new_available_slots(self) -> List[str]:
-        sleep(20)
+        sleep(20)  # todo find element for wait
         sessions = self.browser.find_elements(By.CLASS_NAME, 'sessionList')
         new_known_sessions = {}
         sessions_to_notify = []
