@@ -1,8 +1,9 @@
+import os
 import random
+from datetime import datetime, timedelta
 from time import sleep
 from typing import List
 
-import requests
 from selenium import webdriver
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.webdriver.common.by import By
@@ -11,13 +12,9 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from bot import send_message
 import logging
-import json
 
 # setup logging
 logging.basicConfig(format='%(asctime)s %(message)s', level=logging.INFO)
-
-known_days = {}
-known_sessions = {}
 
 
 class BBDCProcessor:
@@ -39,6 +36,10 @@ class BBDCProcessor:
         self.browser = webdriver.Remote(
             '{:}/wd/hub'.format(chrome_host), DesiredCapabilities.CHROME)
 
+        self._last_time_report = None
+        self.known_days = {}
+        self.known_sessions = {}
+
     def run(self):
         try:
             logging.info("login...")
@@ -50,37 +51,49 @@ class BBDCProcessor:
             logging.info(f"open slots...")
             self._open_slots()
 
-            # parse calendar every 30-150 seconds and send message if new slots are available
-            while True:
-                # report with new days
-                logging.info("parsing calendar...")
-                days = self._get_new_available_days()
-                logging.info(f"New days found: {days}")
-
-                header = self._get_lesson_name()
-                logging.info(f"choose lesson: {header}")
-
-                if len(days) > 0:
-                    send_message(self._bot_token, self._chat_id, f"{header} \n New days found: {days}")
-
-                # detailed report with new slots
-                slots = self._get_new_available_slots()
-                logging.info(f"New slots found: {slots}")
-                if len(slots) > 0:
-                    send_message(self._bot_token, self._chat_id, f"{header} \n New slots found:\n{''.join(slots)}")
-
-                logging.info("wait for 30-150 seconds before refresh...")
-                sleep(random.randint(30, 150))
-                logging.info("refreshing...")
-                self.browser.refresh()
-
         except Exception as e:
             logging.exception(e)
             send_message(self._bot_token, self._chat_id, f"[Error]\n{str(e)}")
-            raise
-        finally:
-            self.browser.quit()
+            os.exit(1)
 
+            # parse calendar every 30-150 seconds and send message if new slots are available
+            while True:
+                try:
+                    # report with new days
+                    logging.info("parsing calendar...")
+                    days = self._get_new_available_days()
+                    logging.info(f"New days found: {days}")
+
+                    header = self._get_lesson_name()
+                    logging.info(f"choose lesson: {header}")
+
+                    if len(days) > 0:
+                        send_message(self._bot_token, self._chat_id, f"{header} \n New days found: {days}")
+
+                    # detailed report with new slots
+                    slots = self._get_new_available_slots()
+                    logging.info(f"New slots found: {slots}")
+                    if len(slots) > 0:
+                        send_message(self._bot_token, self._chat_id, f"{header} \n New slots found:\n{''.join(slots)}")
+                        self._last_time_report = datetime.now()
+
+                    if len(days) == 0 and len(slots) == 0:
+                        logging.info("no new slots found")
+
+                    if datetime.now() > self._last_time_report + timedelta(minutes=30):
+                        logging.info("no new slots found for 30 minutes, send health report...")
+                        send_message(self._bot_token, self._chat_id, f"[Health report]\n{header} \n no new slots found for 30 minutes")
+
+                    logging.info("wait for 30-150 seconds before refresh...")
+                    sleep(random.randint(30, 150))
+                    logging.info("refreshing...")
+                    self.browser.refresh()
+
+                except Exception as e:
+                    logging.exception(e)
+                    send_message(self._bot_token, self._chat_id, f"[Error]\n{str(e)}")
+                    self.browser.refresh()
+                    sleep(60)
     def _login(self):
         self.browser.get('https://booking.bbdc.sg/#/login?redirect=%2Fbooking%2Findex')
 
@@ -128,7 +141,7 @@ class BBDCProcessor:
             logging.info("No continue button")
 
     def _get_new_available_slots(self) -> List[str]:
-        wait = WebDriverWait(self.browser, 10)
+        wait = WebDriverWait(self.browser, 60)
         wait.until(
             EC.presence_of_element_located((By.CLASS_NAME, 'sessionList')))
         sessions = self.browser.find_elements(By.CLASS_NAME, 'sessionList')
@@ -144,15 +157,15 @@ class BBDCProcessor:
 
                 name, time, cost = card.text.splitlines()
                 logging.info(f"Session found: {date} {time}")
-                if f'{date} {time}' not in known_sessions:
-                    known_sessions[f'{date} {time}'] = True
+                if f'{date} {time}' not in self.known_sessions:
+                    self.known_sessions[f'{date} {time}'] = True
                     logging.warning(f"[NEW] New session found: {date} {time}")
                     sessions_to_notify.append(f"{date} {time}\n")
                 new_known_sessions[f'{date} {time}'] = True
 
         # refresh known sessions
-        known_sessions.clear()
-        known_sessions.update(new_known_sessions)
+        self.known_sessions.clear()
+        self.known_sessions.update(new_known_sessions)
         return sessions_to_notify
 
     def _get_new_available_days(self) -> List[str]:
@@ -165,14 +178,14 @@ class BBDCProcessor:
         for day in calendar.find_elements(By.CLASS_NAME, 'v-btn__content'):
             logging.info(f"Day found: {day.text}")
             new_known_days[day.text] = True
-            if day.text not in known_days:
+            if day.text not in self.known_days:
                 days_to_notify.append(day.text)
                 logging.warning(f"[NEW] New day found: {day.text}")
             day.click()
             sleep(random.randint(2, 4))
         # refresh known days
-        known_days.clear()
-        known_days.update(new_known_days)
+        self.known_days.clear()
+        self.known_days.update(new_known_days)
         return days_to_notify
 
     def _get_lesson_name(self) -> str:
