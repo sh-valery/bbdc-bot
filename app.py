@@ -110,40 +110,41 @@ class BBDCProcessor:
         wait.until(EC.presence_of_element_located((By.XPATH,
                                                    '//button[@class="v-btn v-btn--is-elevated v-btn--has-bg theme--light v-size--default primary"]')))
         logging.info("click booking button")
-        book_next = self.browser.find_elements_by_xpath(
-            '//button[@class="v-btn v-btn--is-elevated v-btn--has-bg theme--light v-size--default primary"]')[-1]
-
+        book_next = self.browser.find_elements(By.XPATH,
+                                               '//button[@class="v-btn v-btn--is-elevated v-btn--has-bg theme--light v-size--default primary"]')[
+            -1]
         book_next.click()
 
         # if have booked lesson, click continue
         try:
-            continue_button = self.browser.find_element_by_xpath(
-                '/html/body/div[1]/div[3]/div/div/div[2]/button[2]')
+            continue_button = self.browser.find_element(By.XPATH,
+                                                        '/html/body/div[1]/div[3]/div/div/div[2]/button[2]')
             continue_button.click()
         except NoSuchElementException:
             logging.info("No continue button")
 
     def _get_new_available_slots(self) -> List[str]:
         wait = WebDriverWait(self.browser, 10)
-
         wait.until(
-            EC.presence_of_element_located((By.XPATH, '//div[contains(@class, "available-slot__item__time")]')))
-
-        browser = self.browser
-        sessions = browser.find_elements_by_class_name('sessionList')
+            EC.presence_of_element_located((By.CLASS_NAME, 'sessionList')))
+        sessions = self.browser.find_elements(By.CLASS_NAME, 'sessionList')
         new_known_sessions = {}
         sessions_to_notify = []
         for s in sessions:
             if s.text == '':  # skip empty blocks
                 continue
+            date = s.text.splitlines()[0]
+            for card in s.find_elements(By.CLASS_NAME, 'sessionCard'):
+                if card.text == '':
+                    continue
 
-            date, total, name, time, cost = s.text.splitlines()
-            logging.info(f"Session found: {date} {time}")
-            if f'{date} {time}' not in known_sessions:
-                known_sessions[f'{date} {time}'] = True
-                logging.warning(f"[NEW] New session found: {date} {time}")
-                sessions_to_notify.append(f"{date} {time}\n")
-            new_known_sessions[f'{date} {time}'] = True
+                name, time, cost = card.text.splitlines()
+                logging.info(f"Session found: {date} {time}")
+                if f'{date} {time}' not in known_sessions:
+                    known_sessions[f'{date} {time}'] = True
+                    logging.warning(f"[NEW] New session found: {date} {time}")
+                    sessions_to_notify.append(f"{date} {time}\n")
+                new_known_sessions[f'{date} {time}'] = True
 
         # refresh known sessions
         known_sessions.clear()
@@ -157,7 +158,7 @@ class BBDCProcessor:
                                             '/html/body/div[1]/div/div/main/div/div/div[2]/div/div[2]/div[1]/div[1]/div[1]/div[4]/div/div/div')))
         days_to_notify = []
         new_known_days = {}
-        for day in calendar.find_elements_by_class_name('v-btn__content'):
+        for day in calendar.find_elements(By.CLASS_NAME, 'v-btn__content'):
             logging.info(f"Day found: {day.text}")
             new_known_days[day.text] = True
             if day.text not in known_days:
@@ -172,8 +173,8 @@ class BBDCProcessor:
 
     def _get_lesson_name(self) -> str:
         try:
-            self.browser.find_element_by_xpath('//p[@class="title d-block d-md-none"]')
-            return self.browser.find_element_by_xpath('//p[@class="title d-block d-md-none"]').text
+            self.browser.find_element(By.XPATH, '//p[@class="title d-block d-md-none"]')
+            return self.browser.find_element(By.XPATH, '//p[@class="title d-block d-md-none"]').text
         except NoSuchElementException:
             logging.info("No header for the lesson")
             return "Unknow lesson name"
