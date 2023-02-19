@@ -76,7 +76,7 @@ class BBDCProcessor:
 
         except Exception as e:
             logging.exception(e)
-            send_message(self._bot_token, self._chat_id, f"[Error]\n{e}")
+            send_message(self._bot_token, self._chat_id, f"[Error]\n{str(e)}")
             raise
         finally:
             self.browser.quit()
@@ -97,7 +97,9 @@ class BBDCProcessor:
         self.browser.switch_to.default_content()
 
     def _open_practical_tab(self):
-        wait = WebDriverWait(self.browser, 10)
+        logging.info("waiting practical button to be clickable")
+        sleep(30)
+        wait = WebDriverWait(self.browser, 30)
         practical = wait.until(
             EC.element_to_be_clickable((
                 By.XPATH,
@@ -106,6 +108,8 @@ class BBDCProcessor:
         practical.click()
 
     def _open_slots(self):
+        logging.info("waiting booking button to be clickable")
+        sleep(30)
         wait = WebDriverWait(self.browser, 10)
         wait.until(EC.presence_of_element_located((By.XPATH,
                                                    '//button[@class="v-btn v-btn--is-elevated v-btn--has-bg theme--light v-size--default primary"]')))
@@ -173,8 +177,12 @@ class BBDCProcessor:
 
     def _get_lesson_name(self) -> str:
         try:
-            self.browser.find_element(By.XPATH, '//p[@class="title d-block d-md-none"]')
-            return self.browser.find_element(By.XPATH, '//p[@class="title d-block d-md-none"]').text
+            lesson_title = self.browser.find_element(By.XPATH, '//p[@class="title title-blue d-none d-md-block"]')
+            lesson_title = lesson_title.text
+            if lesson_title == "":
+                logging.warning("No header for the lesson")
+            return lesson_title
+
         except NoSuchElementException:
             logging.info("No header for the lesson")
             return "Unknow lesson name"
