@@ -9,7 +9,6 @@ services:
         context: .
         dockerfile: Dockerfile
 
-# docker run --rm -p 4444:4444 --shm-size="2g" -e SE_NODE_GRID_URL=http://localhost:4444 --name selenium selenium/standalone-chrome:4.8.0-20230202
   chrome-selenium:
     image: selenium/standalone-chrome:4.8.0-20230202
     ports:
