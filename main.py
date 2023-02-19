@@ -11,5 +11,6 @@ if __name__ == "__main__":
         bbdc = BBDCProcessor(config)
         bbdc.run()
     except Exception as e:
+        bbdc.browser.quit()
         print(e)
 

@@ -40,6 +40,13 @@ class BBDCProcessor:
         self.known_days = {}
         self.known_sessions = {}
 
+    def _is_login_page(self) -> bool:
+        if self.browser.current_url.startswith("https://booking.bbdc.sg/#/login"):
+            return True
+        if len(self.browser.find_elements(By.ID, 'input-8')) > 0:
+            return True
+        return False
+
     def run(self):
         try:
             logging.info("login...")
@@ -57,43 +64,49 @@ class BBDCProcessor:
             os.exit(1)
 
             # parse calendar every 30-150 seconds and send message if new slots are available
-            while True:
-                try:
-                    # report with new days
-                    logging.info("parsing calendar...")
-                    days = self._get_new_available_days()
-                    logging.info(f"New days found: {days}")
+        while True:
+            try:
+                # report with new days
+                logging.info("parsing calendar...")
+                days = self._get_new_available_days()
+                logging.info(f"New days found: {days}")
 
-                    header = self._get_lesson_name()
-                    logging.info(f"choose lesson: {header}")
+                header = self._get_lesson_name()
+                logging.info(f"choose lesson: {header}")
 
-                    if len(days) > 0:
-                        send_message(self._bot_token, self._chat_id, f"{header} \n New days found: {days}")
+                if len(days) > 0:
+                    send_message(self._bot_token, self._chat_id, f"{header} \n New days found: {days}")
 
-                    # detailed report with new slots
-                    slots = self._get_new_available_slots()
-                    logging.info(f"New slots found: {slots}")
-                    if len(slots) > 0:
-                        send_message(self._bot_token, self._chat_id, f"{header} \n New slots found:\n{''.join(slots)}")
-                        self._last_time_report = datetime.now()
+                # detailed report with new slots
+                slots = self._get_new_available_slots()
+                logging.info(f"New slots found: {slots}")
+                if len(slots) > 0:
+                    send_message(self._bot_token, self._chat_id, f"{header} \n New slots found:\n{''.join(slots)}")
+                    self._last_time_report = datetime.now()
 
-                    if len(days) == 0 and len(slots) == 0:
-                        logging.info("no new slots found")
+                if len(days) == 0 and len(slots) == 0:
+                    logging.info("no new slots found")
 
-                    if datetime.now() > self._last_time_report + timedelta(minutes=30):
-                        logging.info("no new slots found for 30 minutes, send health report...")
-                        send_message(self._bot_token, self._chat_id, f"[Health report]\n{header} \n no new slots found for 30 minutes")
+                if datetime.now() > self._last_time_report + timedelta(minutes=30):
+                    logging.info("no new slots found for 30 minutes, send health report...")
+                    send_message(self._bot_token, self._chat_id,
+                                 f"[Health report]\n{header} \n no new slots found for 30 minutes")
 
-                    logging.info("wait for 30-150 seconds before refresh...")
-                    sleep(random.randint(30, 150))
-                    logging.info("refreshing...")
-                    self.browser.refresh()
+                logging.info("wait for 30-150 seconds before refresh...")
+                sleep(random.randint(30, 150))
+                logging.info("refreshing...")
+                self.browser.refresh()
 
-                except Exception as e:
-                    logging.exception(e)
-                    send_message(self._bot_token, self._chat_id, f"[Error]\n{str(e)}\nrefresh and sleep 60 seconds...")
-                    self.browser.refresh()
-                    sleep(60)
+            except Exception as e:
+                logging.exception(e)
+                send_message(self._bot_token, self._chat_id, f"[Error]\n{str(e)}\nrefresh and sleep 60 seconds...")
+                self.browser.refresh()
+                sleep(60)
+                if self._is_login_page():
+                    # todo put this logic to function, rerun run from scratch
+                    logging.info("login again...")
+                    self.run()
+
     def _login(self):
         self.browser.get('https://booking.bbdc.sg/#/login?redirect=%2Fbooking%2Findex')
 
@@ -141,9 +154,7 @@ class BBDCProcessor:
             logging.info("No continue button")
 
     def _get_new_available_slots(self) -> List[str]:
-        wait = WebDriverWait(self.browser, 60)
-        wait.until(
-            EC.presence_of_element_located((By.CLASS_NAME, 'sessionList')))
+        sleep(20)
         sessions = self.browser.find_elements(By.CLASS_NAME, 'sessionList')
         new_known_sessions = {}
         sessions_to_notify = []
