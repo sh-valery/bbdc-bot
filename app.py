@@ -36,9 +36,14 @@ class BBDCProcessor:
         self.browser = webdriver.Remote(
             '{:}/wd/hub'.format(chrome_host), DesiredCapabilities.CHROME)
 
-        self._last_time_report = None
+        self._last_time_report = datetime.now()
         self.known_days = {}
         self.known_sessions = {}
+        self.max_days = 7  # don't click the whole month
+
+        send_message(self._bot_token, self._chat_id,
+                     f"[Service Started]\n{datetime.now()}")
+
 
     def _is_login_page(self) -> bool:
         if self.browser.current_url.startswith("https://booking.bbdc.sg/#/login"):
@@ -87,7 +92,7 @@ class BBDCProcessor:
                 if len(days) == 0 and len(slots) == 0:
                     logging.info("no new slots found")
 
-                if self._last_time_report is None or datetime.now() > self._last_time_report + timedelta(minutes=30):
+                if datetime.now() > self._last_time_report + timedelta(minutes=30):
                     logging.info("no new slots found for 30 minutes, send health report...")
                     send_message(self._bot_token, self._chat_id,
                                  f"[Health report]\n{header} \n no new slots found for 30 minutes")
@@ -195,14 +200,18 @@ class BBDCProcessor:
             logging.warning("No available days")
             return []
 
-        for day in available_days:
+        for i, day in enumerate(available_days):
             logging.info(f"Day found: {day.text}")
             new_known_days[day.text] = True
             if day.text not in self.known_days:
                 days_to_notify.append(day.text)
                 logging.warning(f"[NEW] New day found: {day.text}")
             day.click()
+
+            if i > self.max_days:
+                break
             sleep(random.randint(2, 4))
+
         # refresh known days
         self.known_days.clear()
         self.known_days.update(new_known_days)
