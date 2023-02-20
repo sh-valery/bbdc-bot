@@ -87,10 +87,11 @@ class BBDCProcessor:
                 if len(days) == 0 and len(slots) == 0:
                     logging.info("no new slots found")
 
-                if datetime.now() > self._last_time_report + timedelta(minutes=30):
+                if self._last_time_report is None or datetime.now() > self._last_time_report + timedelta(minutes=30):
                     logging.info("no new slots found for 30 minutes, send health report...")
                     send_message(self._bot_token, self._chat_id,
                                  f"[Health report]\n{header} \n no new slots found for 30 minutes")
+                    self._last_time_report = datetime.now()
 
                 logging.info("wait for 30-150 seconds before refresh...")
                 sleep(random.randint(30, 150))
@@ -188,6 +189,11 @@ class BBDCProcessor:
         new_known_days = {}
         available_days = calendar.find_elements(By.CLASS_NAME, 'v-btn__content')
         logging.info(f"days to check: {available_days}")
+
+        # todo selenium bug, it doesn't click in days after refresh
+        if len(available_days) == 0:
+            logging.warning("No available days")
+            return []
 
         for day in available_days:
             logging.info(f"Day found: {day.text}")

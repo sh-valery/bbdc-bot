@@ -1,6 +1,4 @@
 from app import BBDCProcessor
-import schedule
-import time
 from config import load_config
 
 # load config
