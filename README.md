@@ -54,3 +54,12 @@ docker run --rm -d -p 4444:4444 --shm-size=2g selenium/standalone-chrome:94.0
 docker build -t bbdc-bot .
 docker run --rm -it bbdc-bot
 ```
+
+
+# Open the browser
+create an ssh tunnel to the server with run selenium
+```sh
+ssh -L 5901:127.0.0.1:4444 -N -f root@server_ip
+```
+
+open in browser http://localhost:5901

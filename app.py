@@ -110,7 +110,8 @@ class BBDCProcessor:
                 sleep(60)
                 if self._is_login_page():
                     # todo put this logic to function, rerun run from scratch
-                    logging.info("login again...")
+                    logging.info("login again in 240 sec...")
+                    sleep(240)
                     self.run()
 
     def _login(self):
