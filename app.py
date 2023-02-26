@@ -66,7 +66,7 @@ class BBDCProcessor:
         except Exception as e:
             logging.exception(e)
             send_message(self._bot_token, self._chat_id, f"[Error]\n{str(e)}")
-            os.exit(1)
+            exit(1)
 
             # parse calendar every 30-150 seconds and send message if new slots are available
         while True:
@@ -151,6 +151,7 @@ class BBDCProcessor:
                                                '//button[@class="v-btn v-btn--is-elevated v-btn--has-bg theme--light v-size--default primary"]')[
             -1]
         book_next.click()
+        sleep(10)
 
         # if have booked lesson, click continue
         try:
@@ -193,6 +194,7 @@ class BBDCProcessor:
                                             '/html/body/div[1]/div/div/main/div/div/div[2]/div/div[2]/div[1]/div[1]/div[1]/div[4]/div/div/div')))
         days_to_notify = []
         new_known_days = {}
+        sleep(5)
         available_days = calendar.find_elements(By.CLASS_NAME, 'v-btn__content')
         logging.info(f"days to check: {available_days}")
 
