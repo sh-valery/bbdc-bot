@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bbdc-bot
+spec:
+  selector:
+    matchLabels:
+      app: bbdc-bot
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: bbdc-bot
+    spec:
+      containers:
+        - name: bbdc-bot
+          image: your-image-repo/bbdc-bot:latest
+          command: ["python", "/app/bot.py"]
+          env:
+            - name: SELENIUM_DRIVER_URL
+              value: "http://selenium-hub:4444/wd/hub"
+          ports:
+            - containerPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bbdc-bot-service
+spec:
+  selector:
+    app: bbdc-bot
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: 8080
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: selenium-hub
+spec:
+  selector:
+    app: selenium-hub
+  ports:
+    - name: http
+      protocol: TCP
+      port: 4444
+      targetPort: 4444
+  type: ClusterIP

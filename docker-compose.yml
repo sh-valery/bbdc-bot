@@ -8,11 +8,13 @@ services:
     build:
         context: .
         dockerfile: Dockerfile
+    command:
+      - python main.py config_prod_sofus.yaml
 
   chrome-selenium:
     image: selenium/standalone-chrome:4.8.0-20230202
     ports:
-      - "4444:4444"
+      - "14444:4444"
     environment:
        - SE_NODE_GRID_URL=http://localhost:4444
        - SE_NODE_MAX_SESSIONS=2

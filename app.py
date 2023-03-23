@@ -39,7 +39,7 @@ class BBDCProcessor:
         self._last_time_report = datetime.now()
         self.known_days = {}
         self.known_sessions = {}
-        self.max_days = 7  # don't click the whole month
+        self.max_days = 2  # don't click the whole month
 
         send_message(self._bot_token, self._chat_id,
                      f"[Service Started]\n{datetime.now()}")
@@ -211,7 +211,7 @@ class BBDCProcessor:
                 logging.warning(f"[NEW] New day found: {day.text}")
             day.click()
 
-            if i > self.max_days:
+            if i >= self.max_days:
                 break
             sleep(random.randint(2, 4))
 
