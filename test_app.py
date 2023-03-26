@@ -23,9 +23,9 @@ class TestBBDCProcessor(TestCase):
                  datetime.strptime("13:10", '%H:%M').time()),
             Slot(1156545,
                  "SESSION 6",
-                    datetime.strptime("2023-03-28 00:00:00", '%Y-%m-%d %H:%M:%S').date(),
-                    datetime.strptime("17:10", '%H:%M').time(),
-                    datetime.strptime("18:50", '%H:%M').time())
+                 datetime.strptime("2023-03-28 00:00:00", '%Y-%m-%d %H:%M:%S').date(),
+                 datetime.strptime("17:10", '%H:%M').time(),
+                 datetime.strptime("18:50", '%H:%M').time())
         ]
         self.assertEqual(slots[0], assert_slots[0])
         self.assertEqual(slots[1], assert_slots[1])
