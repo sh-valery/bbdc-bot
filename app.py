@@ -1,9 +1,11 @@
+import json
 import os
 import random
 from datetime import datetime, timedelta
 from time import sleep
 from typing import List
 
+import requests
 from selenium import webdriver
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.webdriver.common.by import By
@@ -12,6 +14,8 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from bot import send_message
 import logging
+
+from model import Slot
 
 # setup logging
 logging.basicConfig(format='%(asctime)s %(message)s', level=logging.INFO)
@@ -33,17 +37,18 @@ class BBDCProcessor:
         chrome_host = config["chromedriver"]["host"]
 
         logging.info(f"connecting to selenium host: {chrome_host}")
-        self.browser = webdriver.Remote(
-            '{:}/wd/hub'.format(chrome_host), DesiredCapabilities.CHROME)
+        # todo
+        # self.browser = webdriver.Remote(
+        #     '{:}/wd/hub'.format(chrome_host), DesiredCapabilities.CHROME)
 
         self._last_time_report = datetime.now()
         self.known_days = {}
         self.known_sessions = {}
         self.max_days = 2  # don't click the whole month
 
-        send_message(self._bot_token, self._chat_id,
-                     f"[Service Started]\n{datetime.now()}")
-
+        # todo
+        # send_message(self._bot_token, self._chat_id,
+        #              f"[Service Started]\n{datetime.now()}")
 
     def _is_login_page(self) -> bool:
         if self.browser.current_url.startswith("https://booking.bbdc.sg/#/login"):
@@ -56,12 +61,14 @@ class BBDCProcessor:
         try:
             logging.info("login...")
             self._login()
+            self._find_slots_by_api()
 
-            logging.info(f"open practical tab...")
-            self._open_practical_tab()
-
-            logging.info(f"open slots...")
-            self._open_slots()
+            # old flow - use clicking by elements
+            # logging.info(f"open practical tab...")
+            # self._open_practical_tab()
+            #
+            # logging.info(f"open slots...")
+            # self._open_slots()
 
         except Exception as e:
             logging.exception(e)
@@ -231,3 +238,62 @@ class BBDCProcessor:
         except NoSuchElementException:
             logging.info("No header for the lesson")
             return "Unknow lesson name"
+
+    def _get_jsession_id(self) -> str:
+        self.browser.refresh()
+        res = self.browser.execute_script("return window.localStorage;")
+        jsession = json.loads(res.get("vuex"))['user']['authToken']
+        _, jsessionid = jsession.split(" ")
+
+        return jsessionid
+
+    def _find_slots_by_api(self):
+        url = "https://booking.bbdc.sg/bbdc-back-service/api/booking/c2practical/listPracSlotReleased"
+
+        payload = json.dumps({
+            "courseType": "2B",
+            "insInstructorId": "",
+            "stageSubDesc": "Subject 7.1",
+            "subVehicleType": "Road",
+            "stageSubNo": "7.01"
+        })
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.5 Safari/605.1.15\'',
+            'JSESSIONID': f'Bearer {self._get_jsession_id()}',
+            'Cookie': f'bbdc-token=Bearer%20{self._get_auth_token()}',
+            'Authorization': f'Bearer {self._get_auth_token()}',
+            'Content-Type': 'application/json'
+        }
+
+        response = requests.request("POST", url, headers=headers, data=payload)
+        response = response.json()
+        res = self._find_available_slots(response)
+
+    def _find_available_slots(self, slots: dict):
+        available_slots = []
+        for date_str, slots in slots['data']['releasedSlotListGroupByDay'].items():
+            for slot in slots:
+                # Check if booking is available
+                if slot['bookingProgress'] == 'Available':
+                    # Extract the date and time information
+                    date = slot['slotRefDate'][:10]
+                    time = slot['startTime']
+                    print(f"Booking is available on {date} at {time}")
+                    available_slots.append(Slot(
+                        slot['slotId'],
+                        slot['slotRefName'],
+                        datetime.strptime(slot['slotRefDate'], '%Y-%m-%d %H:%M:%S').date(),
+                        datetime.strptime(slot['startTime'], '%H:%M').time(),
+                        datetime.strptime(slot['endTime'], '%H:%M').time()),
+                    )
+        return available_slots
+
+    def _get_auth_token(self) -> str:
+        self.browser.get_cookies()
+        for cookie in self.browser.get_cookies():
+            if cookie['name'] == 'bbdc-token':
+                token_header = cookie['value']
+                break
+
+        _, auth_token = token_header.split("%20")
+        return auth_token
