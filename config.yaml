@@ -6,6 +6,8 @@ interval: 5
 bbdc:
   username: "FIN4DATE"
   password: "PASSWORD"
+  practical_lesson_target: "3.01" # check if you have the correct lesson target, and it's described in lesson_map.py
+  theory_lesson_target: "PPL2"
 
 chromedriver:
 #  host:  http://localhost:4444

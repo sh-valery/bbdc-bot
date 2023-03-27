@@ -12,8 +12,8 @@ class TestBBDCProcessor(TestCase):
         config_path = "config.yaml"
         config = load_config(config_path)
         bbdc = BBDCProcessor(config)
-        resp = json.loads(mock_output)
-        slots = bbdc._find_available_slots(resp)
+        resp = json.loads(mock_practical_output)
+        slots = bbdc._find_available_slots_in_api_response(resp)
         self.assertEqual(len(slots), 2)
         assert_slots = [
             Slot(1156639,
@@ -30,8 +30,32 @@ class TestBBDCProcessor(TestCase):
         self.assertEqual(slots[0], assert_slots[0])
         self.assertEqual(slots[1], assert_slots[1])
 
+    def test__find_empty_slots_theory(self):
+        config_path = "config.yaml"
+        config = load_config(config_path)
+        bbdc = BBDCProcessor(config)
+        resp = json.loads(mock_empty_theory)
+        slots = bbdc._find_available_slots_in_api_response(resp)
+        self.assertEqual(len(slots), 0)
 
-mock_output = """{
+    def test__find_available_theory_slots(self):
+        config_path = "config.yaml"
+        config = load_config(config_path)
+        bbdc = BBDCProcessor(config)
+        resp = json.loads(mock_theory_output)
+        slots = bbdc._find_available_slots_in_api_response(resp)
+        self.assertEqual(len(slots), 4)
+        assert_slots = [
+            Slot(4944954,
+                 "SESSION 8",
+                 datetime.strptime("2023-04-12 00:00:00", '%Y-%m-%d %H:%M:%S').date(),
+                 datetime.strptime("21:10", '%H:%M').time(),
+                 datetime.strptime("22:50", '%H:%M').time())
+        ]
+        self.assertEqual(slots[0], assert_slots[0])
+
+
+mock_practical_output = """{
     "success": true,
     "message": null,
     "code": 0,
@@ -735,3 +759,273 @@ mock_output = """{
     "resultObject": null
 }
 """
+mock_empty_theory = """
+{
+    "success": true,
+    "message": null,
+    "code": 0,
+    "routeToURL": null,
+    "data": {
+        "releasedSlotMonthList": [
+            {
+                "slotMonthEn": "Mar'23",
+                "slotMonthYm": "202303"
+            },
+            {
+                "slotMonthEn": "Apr'23",
+                "slotMonthYm": "202304"
+            }
+        ],
+        "releasedSlotListGroupByDay": {},
+        "accountBal": 128.79,
+        "couNegActive": "0"
+    },
+    "resultObject": null
+}
+"""
+mock_theory_output = """
+{
+    "success": true,
+    "message": null,
+    "code": 0,
+    "routeToURL": null,
+    "data": {
+        "releasedSlotMonthList": [
+            {
+                "slotMonthEn": "Mar'23",
+                "slotMonthYm": "202303"
+            },
+            {
+                "slotMonthEn": "Apr'23",
+                "slotMonthYm": "202304"
+            }
+        ],
+        "releasedSlotListGroupByDay": {
+            "2023-04-12 00:00:00": [
+                {
+                    "slotId": 4944954,
+                    "slotIdEnc": "Reqs4jBlky/TkucY5hkzqQ==",
+                    "slotRefName": "SESSION 8",
+                    "slotRefDate": "2023-04-12 00:00:00",
+                    "startTime": "21:10",
+                    "endTime": "22:50",
+                    "trainingFee": 16,
+                    "gst": 8,
+                    "gstFee": 1.28,
+                    "baseFee": 17.28,
+                    "totalFee": 17.28,
+                    "warmUpWithGstFee": null,
+                    "rentalWithGstFee": null,
+                    "commWithGstFee": null,
+                    "fixedInstructorSurcharge": null,
+                    "venueId": 7,
+                    "slotAvlComputed": false,
+                    "bookingProgress": "Available",
+                    "bookingProgressEnc": "0wfQsS1mP9SWWLKmKHI6VVP/Hr6YwLOCBP3aJ2uu6u0=",
+                    "computedSlotAvl": 90,
+                    "success": false,
+                    "message": null,
+                    "startDateTime": null,
+                    "courseType": "2B",
+                    "theoryType": "PPL",
+                    "trainingDate": "2023-04-11T16:00:00.000+00:00",
+                    "sessionNo": "8",
+                    "takeBack": 0,
+                    "slotAvl": 90,
+                    "trySell": 0,
+                    "schType": null,
+                    "priceType": "N",
+                    "maxCapSlotAvl": 0,
+                    "vehicleType": null,
+                    "venueName": "HBTL",
+                    "venueTotalFee": 0,
+                    "theoryTrainingFeeDtlDTO": {
+                        "theId": 1152,
+                        "theCourseType": "2B",
+                        "theTheoryType": "PPL",
+                        "theDayTrainingFee": 16,
+                        "theDayGst": 8,
+                        "theNightTrainingFee": 16,
+                        "theNightGst": 8,
+                        "theDateOpt": "Booking Date",
+                        "theEffectiveDate": "2022-12-31T16:00:00.000+00:00"
+                    },
+                    "theoryTestFeeDtlDTO": null,
+                    "pracTestFeeDtlDTO": null,
+                    "clashedFlag": false,
+                    "slotRefDateTime": null
+                }
+            ],
+            "2023-04-26 00:00:00": [
+                {
+                    "slotId": 4944893,
+                    "slotIdEnc": "MkJckl2cSRZZ7a0koS/CRQ==",
+                    "slotRefName": "SESSION 7",
+                    "slotRefDate": "2023-04-26 00:00:00",
+                    "startTime": "19:20",
+                    "endTime": "21:00",
+                    "trainingFee": 16,
+                    "gst": 8,
+                    "gstFee": 1.28,
+                    "baseFee": 17.28,
+                    "totalFee": 17.28,
+                    "warmUpWithGstFee": null,
+                    "rentalWithGstFee": null,
+                    "commWithGstFee": null,
+                    "fixedInstructorSurcharge": null,
+                    "venueId": 7,
+                    "slotAvlComputed": false,
+                    "bookingProgress": "Available",
+                    "bookingProgressEnc": "707rr+SW03+bHiNao2ivgLoIWZ3iQOLVScdKbs1qJU8=",
+                    "computedSlotAvl": 97,
+                    "success": false,
+                    "message": null,
+                    "startDateTime": null,
+                    "courseType": "2B",
+                    "theoryType": "PPL",
+                    "trainingDate": "2023-04-25T16:00:00.000+00:00",
+                    "sessionNo": "7",
+                    "takeBack": 0,
+                    "slotAvl": 97,
+                    "trySell": 0,
+                    "schType": null,
+                    "priceType": "N",
+                    "maxCapSlotAvl": 0,
+                    "vehicleType": null,
+                    "venueName": "HBTL",
+                    "venueTotalFee": 0,
+                    "theoryTrainingFeeDtlDTO": {
+                        "theId": 1152,
+                        "theCourseType": "2B",
+                        "theTheoryType": "PPL",
+                        "theDayTrainingFee": 16,
+                        "theDayGst": 8,
+                        "theNightTrainingFee": 16,
+                        "theNightGst": 8,
+                        "theDateOpt": "Booking Date",
+                        "theEffectiveDate": "2022-12-31T16:00:00.000+00:00"
+                    },
+                    "theoryTestFeeDtlDTO": null,
+                    "pracTestFeeDtlDTO": null,
+                    "clashedFlag": false,
+                    "slotRefDateTime": null
+                }
+            ],
+            "2023-04-15 00:00:00": [
+                {
+                    "slotId": 4944657,
+                    "slotIdEnc": "ibuRfdGYoyCGQXUHz4V3lQ==",
+                    "slotRefName": "SESSION 4",
+                    "slotRefDate": "2023-04-15 00:00:00",
+                    "startTime": "13:20",
+                    "endTime": "15:00",
+                    "trainingFee": 16,
+                    "gst": 8,
+                    "gstFee": 1.28,
+                    "baseFee": 17.28,
+                    "totalFee": 17.28,
+                    "warmUpWithGstFee": null,
+                    "rentalWithGstFee": null,
+                    "commWithGstFee": null,
+                    "fixedInstructorSurcharge": null,
+                    "venueId": 7,
+                    "slotAvlComputed": false,
+                    "bookingProgress": "Available",
+                    "bookingProgressEnc": "U6Y602d3SJFtlmOmyk8JCebvmeT2jfSnTam+3OF2byY=",
+                    "computedSlotAvl": 93,
+                    "success": false,
+                    "message": null,
+                    "startDateTime": null,
+                    "courseType": "2B",
+                    "theoryType": "PPL",
+                    "trainingDate": "2023-04-14T16:00:00.000+00:00",
+                    "sessionNo": "4",
+                    "takeBack": 0,
+                    "slotAvl": 93,
+                    "trySell": 0,
+                    "schType": null,
+                    "priceType": "N",
+                    "maxCapSlotAvl": 0,
+                    "vehicleType": null,
+                    "venueName": "HBTL",
+                    "venueTotalFee": 0,
+                    "theoryTrainingFeeDtlDTO": {
+                        "theId": 1152,
+                        "theCourseType": "2B",
+                        "theTheoryType": "PPL",
+                        "theDayTrainingFee": 16,
+                        "theDayGst": 8,
+                        "theNightTrainingFee": 16,
+                        "theNightGst": 8,
+                        "theDateOpt": "Booking Date",
+                        "theEffectiveDate": "2022-12-31T16:00:00.000+00:00"
+                    },
+                    "theoryTestFeeDtlDTO": null,
+                    "pracTestFeeDtlDTO": null,
+                    "clashedFlag": false,
+                    "slotRefDateTime": null
+                }
+            ],
+            "2023-04-19 00:00:00": [
+                {
+                    "slotId": 4944526,
+                    "slotIdEnc": "7x/uBY28FhvBpmHvnTsXRg==",
+                    "slotRefName": "SESSION 2",
+                    "slotRefDate": "2023-04-19 00:00:00",
+                    "startTime": "09:20",
+                    "endTime": "11:00",
+                    "trainingFee": 16,
+                    "gst": 8,
+                    "gstFee": 1.28,
+                    "baseFee": 17.28,
+                    "totalFee": 17.28,
+                    "warmUpWithGstFee": null,
+                    "rentalWithGstFee": null,
+                    "commWithGstFee": null,
+                    "fixedInstructorSurcharge": null,
+                    "venueId": 7,
+                    "slotAvlComputed": false,
+                    "bookingProgress": "Available",
+                    "bookingProgressEnc": "Lg/wdK7Zht7XQZBF14WYzE/+7QQ5m+jWeDWztYJIUZQ=",
+                    "computedSlotAvl": 97,
+                    "success": false,
+                    "message": null,
+                    "startDateTime": null,
+                    "courseType": "2B",
+                    "theoryType": "PPL",
+                    "trainingDate": "2023-04-18T16:00:00.000+00:00",
+                    "sessionNo": "2",
+                    "takeBack": 0,
+                    "slotAvl": 97,
+                    "trySell": 0,
+                    "schType": null,
+                    "priceType": "N",
+                    "maxCapSlotAvl": 0,
+                    "vehicleType": null,
+                    "venueName": "HBTL",
+                    "venueTotalFee": 0,
+                    "theoryTrainingFeeDtlDTO": {
+                        "theId": 1152,
+                        "theCourseType": "2B",
+                        "theTheoryType": "PPL",
+                        "theDayTrainingFee": 16,
+                        "theDayGst": 8,
+                        "theNightTrainingFee": 16,
+                        "theNightGst": 8,
+                        "theDateOpt": "Booking Date",
+                        "theEffectiveDate": "2022-12-31T16:00:00.000+00:00"
+                    },
+                    "theoryTestFeeDtlDTO": null,
+                    "pracTestFeeDtlDTO": null,
+                    "clashedFlag": false,
+                    "slotRefDateTime": null
+                }
+            ]
+        },
+        "accountBal": 128.79,
+        "couNegActive": "0"
+    },
+    "resultObject": null
+}
+"""
+
