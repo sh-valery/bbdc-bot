@@ -1,4 +1,11 @@
 practical_lessons = {
+    "RC": {
+        "courseType": "2B",
+        "insInstructorId": "",
+        "stageSubDesc": "Circuit Revision",
+        "subVehicleType": "Circuit",
+        "stageSubNo": "RC"
+    },
     "7.01": {
         "courseType": "2B",
         "insInstructorId": "",
