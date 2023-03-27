@@ -42,8 +42,8 @@ class BBDCProcessor:
         self._theory_lesson_target = bbdc.get("theory_lesson_target")
         self._test_target = bbdc.get("test_target")
         # todo
-        # self.browser = webdriver.Remote(
-        #     '{:}/wd/hub'.format(chrome_host), DesiredCapabilities.CHROME)
+        self.browser = webdriver.Remote(
+            '{:}/wd/hub'.format(chrome_host), DesiredCapabilities.CHROME)
 
         self._last_time_report = datetime.now()
         self._known_practical_sessions = set()
@@ -54,8 +54,8 @@ class BBDCProcessor:
         self._refresh_counter = 0
 
         # todo
-        # send_message(self._bot_token, self._chat_id,
-        #              f"[Service Started]\n{datetime.now()}")
+        send_message(self._bot_token, self._chat_id,
+                     f"[Service Started]\n{datetime.now()}")
 
     def _is_login_page(self) -> bool:
         if self.browser.current_url.startswith("https://booking.bbdc.sg/#/login"):
@@ -88,13 +88,14 @@ class BBDCProcessor:
 
                 self._find_test_slots()
 
-                r = random.randint(30, 150)
+                r = random.randint(60, 240)
                 logging.info(f"wait for {str(r)} seconds...")
                 sleep(r)
                 self._refresh()
 
             except Exception as e:
-                logging.error(f"error in main loop, after  {self._api_call_counter} api calls and {self._refresh_counter} refreshes")
+                logging.error(
+                    f"error in main loop, after  {self._api_call_counter} api calls and {self._refresh_counter} refreshes")
                 logging.exception(e)
                 send_message(self._bot_token, self._chat_id, f"[Error]\n{str(e)}\nrefresh and sleep 60 seconds...")
                 self._refresh()
@@ -234,6 +235,42 @@ class BBDCProcessor:
         logging.info(f"available slots: {available_slots}")
         self._notify_about_new_slots(available_slots, "test")
 
+    def _book_first_new_slot(self, slot: Slot):
+        # todo check slot canceling before booking
+        # todo define priorities for slots
+
+        if slot.start_time.hours > 11 and slot.start_time.hours > 21:
+            logging.warning(f"slot {slot} is too early or late, skip")
+            send_message(self._bot_token, self._chat_id, f"slot {slot} is too early or late, skip")
+            return
+
+        send_message(self._bot_token, self._chat_id, f"book slot {slot}")
+
+        self._api_call_counter += 1
+        logging.info(f"book practical slots,  {self._api_call_counter} api call")
+        url = "https://booking.bbdc.sg/bbdc-back-service/api/booking/c2practical/callBookPracticalSlot"
+
+        payload = {
+            "courseType": "2B",
+            "slotIdList": [
+                slot.id
+            ],
+            "insInstructorId": "",
+            "subVehicleType": "Road"
+        }
+
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.5 Safari/605.1.15\'',
+            'JSESSIONID': f'Bearer {self._get_jsession_id()}',
+            'Cookie': f'bbdc-token=Bearer%20{self._get_auth_token()}',
+            'Authorization': f'Bearer {self._get_auth_token()}',
+            'Content-Type': 'application/json'
+        }
+
+        response = requests.request("POST", url, headers=headers, json=payload)
+        logging.info(f"booking response: {response}")
+        logging.info(f"booking body response: {response.json()}")
+
     def _notify_about_new_slots(self, slots: List[Slot], lesson_type: str):
         if lesson_type == "practical":
             known_sessions = self._known_practical_sessions
@@ -251,7 +288,7 @@ class BBDCProcessor:
             logging.info(f"{prefix}: {s}")
 
         if len(new_slots) > 0:
-            sorted(new_slots, key=lambda x: x.start_time)
+            new_slots.sort(key=lambda x: x.start_time)
             self._last_time_report = datetime.now()
             body = '\n'.join([str(s) for s in new_slots])
             send_message(self._bot_token, self._chat_id, f"[New slot]\n{body}")
