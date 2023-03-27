@@ -42,17 +42,20 @@ class BBDCProcessor:
         self._theory_lesson_target = bbdc.get("theory_lesson_target")
         self._test_target = bbdc.get("test_target")
         # todo
-        self.browser = webdriver.Remote(
-            '{:}/wd/hub'.format(chrome_host), DesiredCapabilities.CHROME)
+        # self.browser = webdriver.Remote(
+        #     '{:}/wd/hub'.format(chrome_host), DesiredCapabilities.CHROME)
 
         self._last_time_report = datetime.now()
         self._known_practical_sessions = set()
         self._known_theory_sessions = set()
         self._known_test_sessions = set()
 
+        self._api_call_counter = 0
+        self._refresh_counter = 0
+
         # todo
-        send_message(self._bot_token, self._chat_id,
-                     f"[Service Started]\n{datetime.now()}")
+        # send_message(self._bot_token, self._chat_id,
+        #              f"[Service Started]\n{datetime.now()}")
 
     def _is_login_page(self) -> bool:
         if self.browser.current_url.startswith("https://booking.bbdc.sg/#/login"):
@@ -88,18 +91,23 @@ class BBDCProcessor:
                 r = random.randint(30, 150)
                 logging.info(f"wait for {str(r)} seconds...")
                 sleep(r)
-                self.browser.refresh()
+                self._refresh()
 
             except Exception as e:
+                logging.error(f"error in main loop, after  {self._api_call_counter} api calls and {self._refresh_counter} refreshes")
                 logging.exception(e)
                 send_message(self._bot_token, self._chat_id, f"[Error]\n{str(e)}\nrefresh and sleep 60 seconds...")
-                self.browser.refresh()
+                self._refresh()
                 sleep(60)
                 if self._is_login_page():
                     # todo put this logic to function, rerun run from scratch
                     logging.info("login again in 240 sec...")
                     sleep(240)
                     self.run()
+
+    def _refresh(self):
+        self._refresh_counter += 1
+        self.browser.refresh()
 
     def _send_health_report(self):
         if datetime.now() > self._last_time_report + timedelta(minutes=30):
@@ -133,7 +141,8 @@ class BBDCProcessor:
     def _find_practical_slots(self):
         if self._practical_lesson_target is None:
             return
-
+        self._api_call_counter += 1
+        logging.info(f"find practical slots,  {self._api_call_counter} api call")
         url = "https://booking.bbdc.sg/bbdc-back-service/api/booking/c2practical/listPracSlotReleased"
 
         payload = json.dumps(practical_lessons[self._practical_lesson_target])
@@ -159,8 +168,10 @@ class BBDCProcessor:
         if self._theory_lesson_target is None:
             return
 
-        url = "https://booking.bbdc.sg/bbdc-back-service/api/booking/theory/listTheoryLessonByDate"
+        self._api_call_counter += 1
+        logging.info(f"find theory slots,  {self._api_call_counter} api call")
 
+        url = "https://booking.bbdc.sg/bbdc-back-service/api/booking/theory/listTheoryLessonByDate"
         payload = theoretical_lessons[self._theory_lesson_target]
         headers = {
             'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.5 Safari/605.1.15\'',
@@ -192,8 +203,10 @@ class BBDCProcessor:
         if self._test_target is None:
             return
 
-        url = "https://booking.bbdc.sg/bbdc-back-service/api/booking/test/listTheoryTestSlotWithMaxCap"
+        self._api_call_counter += 1
+        logging.info(f"find test slot,  {self._api_call_counter} api call")
 
+        url = "https://booking.bbdc.sg/bbdc-back-service/api/booking/test/listTheoryTestSlotWithMaxCap"
         payload = test_lessons[self._test_target]
         headers = {
             'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.5 Safari/605.1.15\'',
@@ -238,7 +251,7 @@ class BBDCProcessor:
             logging.info(f"{prefix}: {s}")
 
         if len(new_slots) > 0:
-            sorted(new_slots, key=lambda x: (x.date, x.start_time))
+            sorted(new_slots, key=lambda x: x.start_time)
             self._last_time_report = datetime.now()
             body = '\n'.join([str(s) for s in new_slots])
             send_message(self._bot_token, self._chat_id, f"[New slot]\n{body}")
@@ -251,13 +264,20 @@ class BBDCProcessor:
         for date_str, slots in slots['data']['releasedSlotListGroupByDay'].items():
             for slot in slots:
                 if slot['bookingProgress'] == 'Available':
+                    day = datetime.strptime(slot['slotRefDate'], '%Y-%m-%d %H:%M:%S')
+
+                    start_time = datetime.strptime(slot['startTime'], "%H:%M")
+                    start_time = day + timedelta(hours=start_time.hour, minutes=start_time.minute)
+
+                    end_time = datetime.strptime(slot['endTime'], "%H:%M")
+                    end_time = day + timedelta(hours=end_time.hour, minutes=end_time.minute)
+
                     available_slots.append(Slot(
                         slot['slotId'],
                         slot['slotRefName'],
-                        datetime.strptime(slot['slotRefDate'], '%Y-%m-%d %H:%M:%S').date(),
-                        datetime.strptime(slot['startTime'], '%H:%M').time(),
-                        datetime.strptime(slot['endTime'], '%H:%M').time()),
-                    )
+                        start_time,
+                        end_time
+                    ))
         return available_slots
 
     def _get_auth_token(self) -> str:

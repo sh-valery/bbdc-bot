@@ -18,14 +18,13 @@ class TestBBDCProcessor(TestCase):
         assert_slots = [
             Slot(1156639,
                  "SESSION 3",
-                 datetime.strptime("2023-03-30 00:00:00", '%Y-%m-%d %H:%M:%S').date(),
-                 datetime.strptime("11:30", '%H:%M').time(),
-                 datetime.strptime("13:10", '%H:%M').time()),
+                 datetime.strptime("2023-03-30 11:30:00", '%Y-%m-%d %H:%M:%S'),
+                 datetime.strptime("2023-03-30 13:10:00", '%Y-%m-%d %H:%M:%S')),
             Slot(1156545,
                  "SESSION 6",
-                 datetime.strptime("2023-03-28 00:00:00", '%Y-%m-%d %H:%M:%S').date(),
-                 datetime.strptime("17:10", '%H:%M').time(),
-                 datetime.strptime("18:50", '%H:%M').time())
+                 datetime.strptime("2023-03-28 17:10:00", '%Y-%m-%d %H:%M:%S'),
+                 datetime.strptime("2023-03-28 18:50:00", '%Y-%m-%d %H:%M:%S'),
+                 )
         ]
         self.assertEqual(slots[0], assert_slots[0])
         self.assertEqual(slots[1], assert_slots[1])
@@ -48,7 +47,7 @@ class TestBBDCProcessor(TestCase):
         assert_slots = [
             Slot(4944954,
                  "SESSION 8",
-                 datetime.strptime("2023-04-12 00:00:00", '%Y-%m-%d %H:%M:%S').date(),
+                 datetime.strptime("2023-04-12 00:00:00", '%Y-%m-%d %H:%M:%S'),
                  datetime.strptime("21:10", '%H:%M').time(),
                  datetime.strptime("22:50", '%H:%M').time())
         ]
@@ -1028,4 +1027,3 @@ mock_theory_output = """
     "resultObject": null
 }
 """
-
