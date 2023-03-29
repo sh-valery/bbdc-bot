@@ -1,7 +1,7 @@
 import json
 import logging
 import random
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
 from time import sleep
 from typing import List
 
@@ -27,6 +27,7 @@ class BBDCProcessor:
 
         self._username = config["bbdc"]["username"]
         self._password = config["bbdc"]["password"]
+        self._auto_booking = config["bbdc"].get('auto_book', 'false')
 
         # bot
         self._bot_token = config["telegram"]["token"]
@@ -68,7 +69,7 @@ class BBDCProcessor:
         try:
             logging.info("login...")
             self._login()
-            sleep(10)
+            sleep(15)
 
         except Exception as e:
             logging.exception(e)
@@ -133,6 +134,9 @@ class BBDCProcessor:
         self.browser.switch_to.default_content()
 
     def _get_jsession_id(self) -> str:
+        wait = WebDriverWait(self.browser, 60)
+        wait.until(EC.visibility_of_element_located((By.ID, 'app')))
+
         res = self.browser.execute_script("return window.localStorage;")
         jsession = json.loads(res.get("vuex"))['user']['authToken']
         _, jsessionid = jsession.split(" ")
@@ -142,38 +146,20 @@ class BBDCProcessor:
     def _find_practical_slots(self):
         if self._practical_lesson_target is None:
             return
-        self._api_call_counter += 1
         logging.info(f"find practical slots,  {self._api_call_counter} api call")
         url = "https://booking.bbdc.sg/bbdc-back-service/api/booking/c2practical/listPracSlotReleased"
 
-        payload = json.dumps(practical_lessons[self._practical_lesson_target])
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.5 Safari/605.1.15\'',
-            'JSESSIONID': f'Bearer {self._get_jsession_id()}',
-            'Cookie': f'bbdc-token=Bearer%20{self._get_auth_token()}',
-            'Authorization': f'Bearer {self._get_auth_token()}',
-            'Content-Type': 'application/json'
-        }
-
-        response = requests.request("POST", url, headers=headers, json=payload)
-        response = response.json()
-        available_slots = self._find_available_slots_in_api_response(response)
-        for i in available_slots:
-            i.type = "practical"
-            i.lesson_name = self._practical_lesson_target
+        payload = practical_lessons[self._practical_lesson_target]
+        available_slots = self._find_slots(payload, url)
 
         logging.info(f"available slots: {available_slots}")
         self._notify_about_new_slots(available_slots, "practical")
 
-    def _find_theory_slots(self):
-        if self._theory_lesson_target is None:
-            return
+        self._book_first_new_slot(available_slots)
 
+    def _find_slots(self, payload, url):
         self._api_call_counter += 1
-        logging.info(f"find theory slots,  {self._api_call_counter} api call")
 
-        url = "https://booking.bbdc.sg/bbdc-back-service/api/booking/theory/listTheoryLessonByDate"
-        payload = theoretical_lessons[self._theory_lesson_target]
         headers = {
             'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.5 Safari/605.1.15\'',
             'JSESSIONID': f'Bearer {self._get_jsession_id()}',
@@ -181,17 +167,29 @@ class BBDCProcessor:
             'Authorization': f'Bearer {self._get_auth_token()}',
             'Content-Type': 'application/json'
         }
-
         response = requests.request("POST", url, headers=headers, json=payload)
         response = response.json()
         available_slots = self._find_available_slots_in_api_response(response)
-
         if len(available_slots) == 0:
             payload['releasedSlotMonth'] = (datetime.now() + timedelta(days=30)).strftime("%Y%m")
             logging.warning(f"no available theory slots, search next month: {payload['releasedSlotMonth']}")
             response = requests.request("POST", url, headers=headers, json=payload)
             response = response.json()
             available_slots = self._find_available_slots_in_api_response(response)
+        for i in available_slots:
+            i.type = "practical"
+            i.lesson_name = self._practical_lesson_target
+        return available_slots
+
+    def _find_theory_slots(self):
+        if self._theory_lesson_target is None:
+            return
+
+        logging.info(f"find theory slots,  {self._api_call_counter} api call")
+
+        url = "https://booking.bbdc.sg/bbdc-back-service/api/booking/theory/listTheoryLessonByDate"
+        payload = theoretical_lessons[self._theory_lesson_target]
+        available_slots = self._find_slots(payload, url)
 
         for i in available_slots:
             i.type = "theory"
@@ -204,29 +202,11 @@ class BBDCProcessor:
         if self._test_target is None:
             return
 
-        self._api_call_counter += 1
         logging.info(f"find test slot,  {self._api_call_counter} api call")
 
         url = "https://booking.bbdc.sg/bbdc-back-service/api/booking/test/listTheoryTestSlotWithMaxCap"
         payload = test_lessons[self._test_target]
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.5 Safari/605.1.15\'',
-            'JSESSIONID': f'Bearer {self._get_jsession_id()}',
-            'Cookie': f'bbdc-token=Bearer%20{self._get_auth_token()}',
-            'Authorization': f'Bearer {self._get_auth_token()}',
-            'Content-Type': 'application/json'
-        }
-
-        response = requests.request("POST", url, headers=headers, json=payload)
-        response = response.json()
-        available_slots = self._find_available_slots_in_api_response(response)
-
-        if len(available_slots) == 0:
-            payload['releasedSlotMonth'] = (datetime.now() + timedelta(days=30)).strftime("%Y%m")
-            logging.warning(f"no available test slots, search next month: {payload['releasedSlotMonth']}")
-            response = requests.request("POST", url, headers=headers, json=payload)
-            response = response.json()
-            available_slots = self._find_available_slots_in_api_response(response)
+        available_slots = self._find_slots(payload, url)
 
         for i in available_slots:
             i.type = "test"
@@ -235,13 +215,30 @@ class BBDCProcessor:
         logging.info(f"available slots: {available_slots}")
         self._notify_about_new_slots(available_slots, "test")
 
-    def _book_first_new_slot(self, slot: Slot):
-        # todo check slot canceling before booking
-        # todo define priorities for slots
+    def _book_first_new_slot(self, slots: List[Slot]):
+        if len(slots) == 0:
+            return
 
-        if slot.start_time.hours > 11 and slot.start_time.hours > 21:
+        slots.sort(key=lambda x: x.start_time)
+
+        slot = slots[0]
+
+        if self._auto_booking is False:
+            return
+
+        if 11 < slot.start_time.hours < 20:
             logging.warning(f"slot {slot} is too early or late, skip")
             send_message(self._bot_token, self._chat_id, f"slot {slot} is too early or late, skip")
+            return
+
+        if time.now() - slot.start_time < timedelta(hours=24):
+            logging.warning(f"slot {slot} is too close, skip")
+            send_message(self._bot_token, self._chat_id, f"slot {slot} is too close, skip")
+            return
+
+        if time.now() - slot.start_time > timedelta(days=4):
+            logging.warning(f"slot {slot} is too far, skip")
+            send_message(self._bot_token, self._chat_id, f"slot {slot} is too far, skip")
             return
 
         send_message(self._bot_token, self._chat_id, f"book slot {slot}")
@@ -270,6 +267,7 @@ class BBDCProcessor:
         response = requests.request("POST", url, headers=headers, json=payload)
         logging.info(f"booking response: {response}")
         logging.info(f"booking body response: {response.json()}")
+        self._auto_booking = False
 
     def _notify_about_new_slots(self, slots: List[Slot], lesson_type: str):
         if lesson_type == "practical":
@@ -326,3 +324,5 @@ class BBDCProcessor:
 
         _, auth_token = token_header.split("%20")
         return auth_token
+
+
