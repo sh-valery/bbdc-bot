@@ -21,4 +21,4 @@ class Slot:
         return hash((self.id, self.name, self.start_time, self.end_time, self.lesson_name))
 
     def __str__(self):
-        return f"{self.lesson_name} {self.start_time.strftime('%d %b %Y %H:%M')}"
+        return f"{self.start_time.strftime('%d %b %Y %H:%M')} \t {self.lesson_name}"
