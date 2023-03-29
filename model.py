@@ -1,11 +1,15 @@
 class Slot:
-    def __init__(self, id, name, start_time, end_time, lesson_name=None, lesson_type=None):
+    def __init__(self, id, name, start_time, end_time, id_enc=None, booking_progress_enc=None):
         self.id = id
         self.name = name
         self.start_time = start_time
         self.end_time = end_time
-        self.lesson_name = lesson_name
-        self.type = lesson_type
+        self.lesson_name = None
+        self.type = None
+
+        # required for booking
+        self.id_enc = id_enc
+        self.booking_progress_enc = booking_progress_enc
 
     def __eq__(self, other):
         if not isinstance(other, Slot):

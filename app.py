@@ -89,9 +89,7 @@ class BBDCProcessor:
 
                 self._find_test_slots()
 
-                r = random.randint(60, 240)
-                logging.info(f"wait for {str(r)} seconds...")
-                sleep(r)
+                self._smart_sleep()
                 self._refresh()
 
             except Exception as e:
@@ -106,6 +104,23 @@ class BBDCProcessor:
                     logging.info("login again in 240 sec...")
                     sleep(240)
                     self.run()
+
+    @staticmethod
+    def _smart_sleep():
+        # Get the current date and time in the Singapore time zone
+        sg_timezone = datetime.timezone(datetime.timedelta(hours=8))
+        now = datetime.datetime.now(tz=sg_timezone)
+        hour = now.hour
+
+        # Sleep for 15-45 minutes between 1 AM and 5 AM Singapore time
+        if 2 <= hour < 5:
+            sleep_time = random.randint(900, 2700)  # 15-45 minutes in seconds
+        else:
+            sleep_time = random.randint(60, 240)  # 1-4 minutes in seconds
+
+        # Sleep for the calculated amount of time
+        logging.info(f"Wait for {sleep_time} seconds...")
+        sleep(sleep_time)
 
     def _refresh(self):
         self._refresh_counter += 1
@@ -261,14 +276,15 @@ class BBDCProcessor:
             logging.info(f"book practical slots,  {self._api_call_counter} api call")
             url = "https://booking.bbdc.sg/bbdc-back-service/api/booking/c2practical/callBookPracticalSlot"
 
-            payload = {
-                "courseType": "2B",
-                "slotIdList": [
-                    slot.id
-                ],
-                "insInstructorId": "",
-                "subVehicleType": "Road"
-            }
+            payload = {"courseType": "2B",
+                       "slotIdList": [slot.id],
+                       "encryptSlotList": [
+                           {
+                               "slotIdEnc": slot.id_enc,
+                               "bookingProgressEnc": slot.booking_progress_enc
+                           }],
+                       "insInstructorId": "",
+                       "subVehicleType": "Circuit"}  # todo check road for road
 
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.5 Safari/605.1.15\'',
@@ -326,7 +342,9 @@ class BBDCProcessor:
                         slot['slotId'],
                         slot['slotRefName'],
                         start_time,
-                        end_time
+                        end_time,
+                        slot['slotIdEnc'],
+                        slot['bookingProgressEnc']
                     ))
         return available_slots
 
@@ -339,5 +357,3 @@ class BBDCProcessor:
 
         _, auth_token = token_header.split("%20")
         return auth_token
-
-
