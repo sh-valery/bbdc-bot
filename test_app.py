@@ -13,7 +13,7 @@ class TestBBDCProcessor(TestCase):
         config = load_config(config_path)
         bbdc = BBDCProcessor(config)
         resp = json.loads(mock_practical_output)
-        slots = bbdc._find_available_slots_in_api_response(resp)
+        slots = bbdc._parse_available_slots_in_api_response(resp)
         self.assertEqual(len(slots), 2)
         assert_slots = [
             Slot(1156639,
@@ -34,7 +34,7 @@ class TestBBDCProcessor(TestCase):
         config = load_config(config_path)
         bbdc = BBDCProcessor(config)
         resp = json.loads(mock_empty_theory)
-        slots = bbdc._find_available_slots_in_api_response(resp)
+        slots = bbdc._parse_available_slots_in_api_response(resp)
         self.assertEqual(len(slots), 0)
 
     def test__find_available_theory_slots(self):
@@ -42,7 +42,7 @@ class TestBBDCProcessor(TestCase):
         config = load_config(config_path)
         bbdc = BBDCProcessor(config)
         resp = json.loads(mock_theory_output)
-        slots = bbdc._find_available_slots_in_api_response(resp)
+        slots = bbdc._parse_available_slots_in_api_response(resp)
         self.assertEqual(len(slots), 4)
         assert_slots = [
             Slot(4944954,
