@@ -151,6 +151,10 @@ class BBDCProcessor:
         payload = practical_lessons[self._practical_lesson_target]
         available_slots = self._find_slots(payload, url)
 
+        for i in available_slots:
+            i.type = "practical"
+            i.lesson_name = self._practical_lesson_target
+
         logging.info(f"available slots: {available_slots}")
         self._notify_about_new_slots(available_slots, "practical")
 
@@ -170,14 +174,13 @@ class BBDCProcessor:
         response = response.json()
         available_slots = self._find_available_slots_in_api_response(response)
         if len(available_slots) == 0:
+            logging.warning("no available slots, search next month")
             payload['releasedSlotMonth'] = (datetime.now() + timedelta(days=30)).strftime("%Y%m")
             logging.warning(f"no available theory slots, search next month: {payload['releasedSlotMonth']}")
             response = requests.request("POST", url, headers=headers, json=payload)
             response = response.json()
             available_slots = self._find_available_slots_in_api_response(response)
-        for i in available_slots:
-            i.type = "practical"
-            i.lesson_name = self._practical_lesson_target
+
         return available_slots
 
     def _find_theory_slots(self):
