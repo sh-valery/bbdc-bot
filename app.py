@@ -111,7 +111,7 @@ class BBDCProcessor:
             i.type = "practical"
             i.lesson_name = self._practical_lesson_target
 
-        logging.info(f"available slots: {available_slots}")
+        logging.info(f"found {len(available_slots)} practical slots")
         self._notify_about_new_slots(available_slots, "practical")
 
         self._book_first_new_slot(available_slots)
@@ -130,7 +130,7 @@ class BBDCProcessor:
             i.type = "theory"
             i.lesson_name = self._theory_lesson_target
 
-        logging.info(f"available slots: {available_slots}")
+        logging.info(f"found {len(available_slots)} theory slots")
         self._notify_about_new_slots(available_slots, "theory")
 
     def _find_test_slots(self):
@@ -147,7 +147,7 @@ class BBDCProcessor:
             i.type = "test"
             i.lesson_name = self._test_target
 
-        logging.info(f"available slots: {available_slots}")
+        logging.info(f"found {len(available_slots)} test slots")
         self._notify_about_new_slots(available_slots, "test")
 
     def _find_slots(self, payload, url):
