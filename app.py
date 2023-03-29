@@ -187,7 +187,7 @@ class BBDCProcessor:
         if len(available_slots) == 0:
             logging.warning("no available slots, search next month")
             payload['releasedSlotMonth'] = (datetime.now() + timedelta(days=30)).strftime("%Y%m")
-            logging.warning(f"no available theory slots, search next month: {payload['releasedSlotMonth']}")
+            logging.warning(f"no available slots, search next month: {payload['releasedSlotMonth']}")
             response = requests.request("POST", url, headers=headers, json=payload)
             response = response.json()
             available_slots = self._find_available_slots_in_api_response(response)
