@@ -1,7 +1,7 @@
 import json
 import logging
 import random
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from time import sleep
 from typing import List
 
@@ -289,8 +289,8 @@ class BBDCProcessor:
     @staticmethod
     def _smart_sleep():
         # Get the current date and time in the Singapore time zone
-        sg_timezone = datetime.timezone(datetime.timedelta(hours=8))
-        now = datetime.datetime.now(tz=sg_timezone)
+        sg_timezone = timezone(timedelta(hours=8))
+        now = datetime.now(tz=sg_timezone)
         hour = now.hour
 
         # Sleep for 15-45 minutes between 1 AM and 5 AM Singapore time
