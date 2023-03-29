@@ -26,7 +26,7 @@ class BBDCProcessor:
 
         self._username = config["bbdc"]["username"]
         self._password = config["bbdc"]["password"]
-        self._auto_booking = config["bbdc"].get('auto_book', 'false')
+        self._auto_booking = config["bbdc"].get('auto_book', False)
 
         # bot
         self._bot_token = config["telegram"]["token"]
@@ -111,10 +111,11 @@ class BBDCProcessor:
         self.browser.refresh()
 
     def _send_health_report(self):
-        if datetime.now() > self._last_time_report + timedelta(minutes=30):
-            logging.info("no new slots found for 30 minutes, send health report...")
+        health_report_timing = 60
+        if datetime.now() > self._last_time_report + timedelta(minutes=health_report_timing):
+            logging.info(f"no new slots found for {health_report_timing} minutes, send health report...")
             send_message(self._bot_token, self._chat_id,
-                         f"[Health report]\n no new slots found for 30 minutes")
+                         f"[Health report]\n no new slots found for {health_report_timing} minutes")
             self._last_time_report = datetime.now()
 
     def _login(self):
