@@ -163,13 +163,16 @@ class BBDCProcessor:
         response = requests.request("POST", url, headers=headers, json=payload)
         response = response.json()
         available_slots = self._parse_available_slots_in_api_response(response)
-        if len(available_slots) == 0:
-            logging.warning("no available slots, search next month")
+        if len(available_slots) == 0:  # < -1 - never search next month,
+            # == 0 - search next month only if current empty,
+            # < n - search next month if current has fewer slots than n
+            logging.warning(f"only {len(available_slots)} slots, search next month")
             payload['releasedSlotMonth'] = (datetime.now() + timedelta(days=30)).strftime("%Y%m")
             logging.warning(f"no available slots, search next month: {payload['releasedSlotMonth']}")
             response = requests.request("POST", url, headers=headers, json=payload)
             response = response.json()
-            available_slots = self._parse_available_slots_in_api_response(response)
+            next_month_slots = self._parse_available_slots_in_api_response(response)
+            available_slots.extend(next_month_slots)
 
         return available_slots
 
