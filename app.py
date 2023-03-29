@@ -7,6 +7,7 @@ from typing import List
 
 import requests
 from selenium import webdriver
+from selenium.common import TimeoutException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.webdriver.support import expected_conditions as EC
@@ -134,8 +135,17 @@ class BBDCProcessor:
         self.browser.switch_to.default_content()
 
     def _get_jsession_id(self) -> str:
-        wait = WebDriverWait(self.browser, 60)
-        wait.until(EC.visibility_of_element_located((By.ID, 'app')))
+        try:
+            wait = WebDriverWait(self.browser, 60)
+            wait.until(EC.visibility_of_element_located((By.ID, 'app')))
+        except TimeoutException:
+            # try to refresh the browser and take second attempt to get jsessionid,
+            # if the second attempt doesn't help, raise exception
+            logging.error("timeout waiting for jsessionid")
+            self.browser.save_screenshot(f"{datetime.now()}__screenshot.png")
+            self.browser.refresh()
+            wait = WebDriverWait(self.browser, 60)
+            wait.until(EC.visibility_of_element_located((By.ID, 'app')))
 
         res = self.browser.execute_script("return window.localStorage;")
         jsession = json.loads(res.get("vuex"))['user']['authToken']
@@ -231,7 +241,7 @@ class BBDCProcessor:
             # skip far slots
             if slot.start_time - datetime.now() > timedelta(days=4):
                 logging.warning(f"slot {slot} is too far, skip")
-                continue
+                return  # slots are sorted by date, so we can stop here
 
             # skip early morning or late night slots
             if slot.start_time.hour < 11 or slot.start_time.hour > 20:
