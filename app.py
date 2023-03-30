@@ -192,6 +192,7 @@ class BBDCProcessor:
                 new_slots.append(s)
             logging.info(f"{prefix}: {s}")
 
+        logging.info(f"found {len(new_slots)} new {lesson_type} slots")
         if len(new_slots) > 0:
             new_slots.sort(key=lambda x: x.start_time)
             self._last_time_report = datetime.now()
@@ -298,7 +299,7 @@ class BBDCProcessor:
 
         # Sleep for 15-45 minutes between 1 AM and 5 AM Singapore time
         if 2 <= hour < 5:
-            sleep_time = random.randint(900, 2700)  # 15-45 minutes in seconds
+            sleep_time = random.randint(2700, 3600)  # 15-45 minutes in seconds
         else:
             sleep_time = random.randint(60, 240)  # 1-4 minutes in seconds
 
