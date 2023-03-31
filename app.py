@@ -1,7 +1,7 @@
 import json
 import logging
 import random
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, time
 from time import sleep
 from typing import List
 
@@ -254,7 +254,7 @@ class BBDCProcessor:
 
             # skip eng lessons, tuesday and friday 6pm-7pm
             if (slot.start_time.weekday() == 2 or slot.start_time.weekday() == 5) \
-                    and slot.start_time.hour < 19 and 18 < slot.end_time.hour:
+                    and slot.start_time.time < time(19, 00) and time(18, 00) < slot.end_time.time():
                 logging.warning(f"slot {slot} slot intersects with eng lesson, skip")
                 continue
 
