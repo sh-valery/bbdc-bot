@@ -194,6 +194,8 @@ class BBDCProcessor:
 
         logging.info(f"found {len(new_slots)} new {lesson_type} slots")
         if len(new_slots) > 0:
+            max_slots_per_message = 12  # to avoid long lists with far away slots
+            new_slots = new_slots[:max_slots_per_message]
             new_slots.sort(key=lambda x: x.start_time)
             self._last_time_report = datetime.now()
             body = '\n'.join([str(s) for s in new_slots])
