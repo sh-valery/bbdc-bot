@@ -254,9 +254,9 @@ class BBDCProcessor:
                 send_message(self._bot_token, self._chat_id, f"slot {slot} is too early or late, skip")
                 continue
 
-            # skip eng lessons, tuesday and friday 6pm-7pm
-            if (slot.start_time.weekday() == 2 or slot.start_time.weekday() == 5) \
-                    and slot.start_time.time < time(19, 00) and time(18, 00) < slot.end_time.time():
+            # skip eng lessons, tuesday and friday 6pm-7pm, you can set skip your working hours here
+            if (slot.start_time.isoweekday() == 2 or slot.start_time.isoweekday() == 5) \
+                    and slot.start_time.time() < time(19, 00) and time(18, 00) < slot.end_time.time():
                 logging.warning(f"slot {slot} slot intersects with eng lesson, skip")
                 continue
 
