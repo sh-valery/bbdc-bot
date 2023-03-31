@@ -19,6 +19,13 @@ practical_lessons = {
         "stageSubDesc": "Subject 3.1",
         "subVehicleType": "Circuit",
         "stageSubNo": "3.01"
+    },
+    "3.02": {
+        "courseType": "2B",
+        "insInstructorId": "",
+        "stageSubDesc": "Subject 3.2",
+        "subVehicleType": "Circuit",
+        "stageSubNo": "3.02"
     }
 }
 

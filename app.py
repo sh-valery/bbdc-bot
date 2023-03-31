@@ -163,7 +163,7 @@ class BBDCProcessor:
         response = requests.request("POST", url, headers=headers, json=payload)
         response = response.json()
         available_slots = self._parse_available_slots_in_api_response(response)
-        if len(available_slots) == 0:  # < -1 - never search next month,
+        if len(available_slots) < 4:  # < -1 - never search next month,
             # == 0 - search next month only if current empty,
             # < n - search next month if current has fewer slots than n
             logging.warning(f"only {len(available_slots)} slots, search next month")
@@ -242,7 +242,7 @@ class BBDCProcessor:
                 return  # slots are sorted by date, so we can stop here
 
             # skip early morning or late night slots
-            if slot.start_time.hour < 11 or slot.start_time.hour > 20:
+            if slot.start_time.hour < 9 or slot.start_time.hour > 20:
                 logging.warning(f"slot {slot} is too early or late, skip")
                 continue
 
@@ -250,6 +250,12 @@ class BBDCProcessor:
             if slot.start_time - datetime.now() < timedelta(hours=24):
                 logging.warning(f"slot {slot} is too close, skip and notify")
                 send_message(self._bot_token, self._chat_id, f"slot {slot} is too early or late, skip")
+                continue
+
+            # skip eng lessons, tuesday and friday 6pm-7pm
+            if (slot.start_time.weekday() == 2 or slot.start_time.weekday() == 5) \
+                    and slot.start_time.hour < 19 and 18 < slot.end_time.hour:
+                logging.warning(f"slot {slot} slot intersects with eng lesson, skip")
                 continue
 
             # book slot
