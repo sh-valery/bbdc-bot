@@ -7,7 +7,7 @@ from typing import List
 
 import requests
 from selenium import webdriver
-from selenium.common import TimeoutException
+from selenium.common import TimeoutException, InvalidSessionIdException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.webdriver.support import expected_conditions as EC
@@ -84,7 +84,11 @@ class BBDCProcessor:
 
                 self._smart_sleep()
                 self._refresh_browser()
-
+            except InvalidSessionIdException:
+                logging.error("browser session is invalid, restart browser session...")
+                self.browser = webdriver.Remote(
+                    '{:}/wd/hub'.format(self.chrome_host), DesiredCapabilities.CHROME)
+                self.run()
             except Exception as e:
                 logging.error(
                     f"error in main loop, after  {self._api_call_counter} api calls and {self._refresh_counter} refreshes")
@@ -239,7 +243,7 @@ class BBDCProcessor:
 
         for slot in slots:
             # skip far slots
-            if slot.start_time - datetime.now() > timedelta(days=4):
+            if slot.start_time - datetime.now() > timedelta(days=3):
                 logging.warning(f"slot {slot} is too far, skip")
                 return  # slots are sorted by date, so we can stop here
 
@@ -248,48 +252,54 @@ class BBDCProcessor:
                 logging.warning(f"slot {slot} is too early or late, skip")
                 continue
 
-            # skip non-cancelable slots, but notify additionally in telegram
-            if slot.start_time - datetime.now() < timedelta(hours=24):
-                logging.warning(f"slot {slot} is too close, skip and notify")
-                send_message(self._bot_token, self._chat_id, f"slot {slot} is too early or late, skip")
-                continue
-
             # skip eng lessons, tuesday and friday 6pm-7pm, you can set skip your working hours here
             if (slot.start_time.isoweekday() == 2 or slot.start_time.isoweekday() == 5) \
                     and slot.start_time.time() < time(19, 00) and time(18, 00) < slot.end_time.time():
                 logging.warning(f"slot {slot} slot intersects with eng lesson, skip")
                 continue
 
+            # force book
+            if 9 <= slot.start_time.hour < 12 and slot.start_time - datetime.now() < timedelta(
+                    hours=3):  # todo book 9-11:30 slot anyway 3h in advance
+                send_message(self._bot_token, self._chat_id, f"!!! book non canceled slot {slot}")
+                self._book_slot(slot)
+                return
+
+            # skip non-cancelable slots, but notify additionally in telegram
+            if slot.start_time - datetime.now() < timedelta(hours=24):
+                logging.warning(f"slot {slot} is too close, skip and notify")
+                send_message(self._bot_token, self._chat_id, f"slot {slot} is too early or late, skip")
+                continue
+
             # book slot
             send_message(self._bot_token, self._chat_id, f"book slot {slot}")
-
-            self._api_call_counter += 1
-            logging.info(f"book practical slots,  {self._api_call_counter} api call")
-            url = "https://booking.bbdc.sg/bbdc-back-service/api/booking/c2practical/callBookPracticalSlot"
-
-            payload = {"courseType": "2B",
-                       "slotIdList": [slot.id],
-                       "encryptSlotList": [
-                           {
-                               "slotIdEnc": slot.id_enc,
-                               "bookingProgressEnc": slot.booking_progress_enc
-                           }],
-                       "insInstructorId": "",
-                       "subVehicleType": "Circuit"}  # todo check road for road
-
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.5 Safari/605.1.15\'',
-                'JSESSIONID': f'Bearer {self._get_jsession_id()}',
-                'Cookie': f'bbdc-token=Bearer%20{self._get_auth_token()}',
-                'Authorization': f'Bearer {self._get_auth_token()}',
-                'Content-Type': 'application/json'
-            }
-
-            response = requests.request("POST", url, headers=headers, json=payload)
-            logging.info(f"booking response: {response}")
-            logging.info(f"booking body response: {response.json()}")
-            self._auto_booking = False
+            self._book_slot(slot)
             return
+
+    def _book_slot(self, slot):
+        self._api_call_counter += 1
+        logging.info(f"book practical slots,  {self._api_call_counter} api call")
+        url = "https://booking.bbdc.sg/bbdc-back-service/api/booking/c2practical/callBookPracticalSlot"
+        payload = {"courseType": "2B",
+                   "slotIdList": [slot.id],
+                   "encryptSlotList": [
+                       {
+                           "slotIdEnc": slot.id_enc,
+                           "bookingProgressEnc": slot.booking_progress_enc
+                       }],
+                   "insInstructorId": "",
+                   "subVehicleType": "Circuit"}  # todo check road for road
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.5 Safari/605.1.15\'',
+            'JSESSIONID': f'Bearer {self._get_jsession_id()}',
+            'Cookie': f'bbdc-token=Bearer%20{self._get_auth_token()}',
+            'Authorization': f'Bearer {self._get_auth_token()}',
+            'Content-Type': 'application/json'
+        }
+        response = requests.request("POST", url, headers=headers, json=payload)
+        logging.info(f"booking response: {response}")
+        logging.info(f"booking body response: {response.json()}")
+        self._auto_booking = False
 
     def _is_login_page(self) -> bool:
         if self.browser.current_url.startswith("https://booking.bbdc.sg/#/login"):
