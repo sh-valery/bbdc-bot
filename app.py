@@ -360,7 +360,6 @@ class BBDCProcessor:
                 break
 
         _, auth_token = token_header.split("%20")
-        logging.info(f"auth token: {auth_token}")
         return auth_token
 
     def _get_jsession_id(self) -> str:
@@ -380,5 +379,4 @@ class BBDCProcessor:
         jsession = json.loads(res.get("vuex"))['user']['authToken']
         _, jsessionid = jsession.split(" ")
 
-        logging.info(f"jsessionid: {jsessionid}")
         return jsessionid
