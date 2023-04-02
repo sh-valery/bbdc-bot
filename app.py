@@ -45,7 +45,7 @@ class BBDCProcessor:
         # todo
         self.browser = webdriver.Remote(
             '{:}/wd/hub'.format(chrome_host), DesiredCapabilities.CHROME)
-
+        self._chrome_host = chrome_host
         self._last_time_report = datetime.now()
         self._known_practical_sessions = set()
         self._known_theory_sessions = set()
@@ -87,7 +87,7 @@ class BBDCProcessor:
             except InvalidSessionIdException:
                 logging.error("browser session is invalid, restart browser session...")
                 self.browser = webdriver.Remote(
-                    '{:}/wd/hub'.format(self.chrome_host), DesiredCapabilities.CHROME)
+                    '{:}/wd/hub'.format(self._chrome_host), DesiredCapabilities.CHROME)
                 self.run()
             except Exception as e:
                 logging.error(
@@ -199,8 +199,8 @@ class BBDCProcessor:
         logging.info(f"found {len(new_slots)} new {lesson_type} slots")
         if len(new_slots) > 0:
             max_slots_per_message = 12  # to avoid long lists with far away slots
-            new_slots = new_slots[:max_slots_per_message]
             new_slots.sort(key=lambda x: x.start_time)
+            new_slots = new_slots[:max_slots_per_message]
             self._last_time_report = datetime.now()
             body = '\n'.join([str(s) for s in new_slots])
             send_message(self._bot_token, self._chat_id, f"[New slot]\n{body}")
@@ -360,6 +360,7 @@ class BBDCProcessor:
                 break
 
         _, auth_token = token_header.split("%20")
+        logging.info(f"auth token: {auth_token}")
         return auth_token
 
     def _get_jsession_id(self) -> str:
@@ -379,4 +380,5 @@ class BBDCProcessor:
         jsession = json.loads(res.get("vuex"))['user']['authToken']
         _, jsessionid = jsession.split(" ")
 
+        logging.info(f"jsessionid: {jsessionid}")
         return jsessionid
