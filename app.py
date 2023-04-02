@@ -194,7 +194,7 @@ class BBDCProcessor:
             if s not in known_sessions:
                 prefix = "!new slot"
                 new_slots.append(s)
-            logging.info(f"{prefix}: {s}")
+            logging.info(f"{prefix}: {s}, id: {s.id}")
 
         logging.info(f"found {len(new_slots)} new {lesson_type} slots")
         if len(new_slots) > 0:
