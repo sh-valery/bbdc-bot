@@ -211,7 +211,12 @@ class BBDCProcessor:
     @staticmethod
     def _parse_available_slots_in_api_response(slots: dict):
         available_slots = []
-        for date_str, slots in slots['data']['releasedSlotListGroupByDay'].items():
+        slots_by_date = slots['data']['releasedSlotListGroupByDay']
+
+        if slots_by_date is None:
+            return []
+
+        for date_str, slots in slots_by_date.items():
             for slot in slots:
                 if slot['bookingProgress'] == 'Available':
                     day = datetime.strptime(slot['slotRefDate'], '%Y-%m-%d %H:%M:%S')
@@ -243,7 +248,7 @@ class BBDCProcessor:
 
         for slot in slots:
             # skip far slots
-            if slot.start_time - datetime.now() > timedelta(days=3):
+            if slot.start_time - datetime.now() > timedelta(days=5):
                 logging.warning(f"slot {slot} is too far, skip")
                 return  # slots are sorted by date, so we can stop here
 
@@ -258,12 +263,12 @@ class BBDCProcessor:
                 logging.warning(f"slot {slot} slot intersects with eng lesson, skip")
                 continue
 
-            # force book
-            if 9 <= slot.start_time.hour < 12 and slot.start_time - datetime.now() < timedelta(
-                    hours=3):  # todo book 9-11:30 slot anyway 3h in advance
-                send_message(self._bot_token, self._chat_id, f"!!! book non canceled slot {slot}")
-                self._book_slot(slot)
-                return
+            # # force book
+            # if 9 <= slot.start_time.hour < 12 and slot.start_time - datetime.now() < timedelta(
+            #         hours=3):  # todo book 9-11:30 slot anyway 3h in advance
+            #     send_message(self._bot_token, self._chat_id, f"!!! book non canceled slot {slot}")
+            #     self._book_slot(slot)
+            #     return
 
             # skip non-cancelable slots, but notify additionally in telegram
             if slot.start_time - datetime.now() < timedelta(hours=24):
