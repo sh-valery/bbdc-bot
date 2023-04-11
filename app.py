@@ -1,17 +1,21 @@
-import os
+import json
+import logging
 import random
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone, time
 from time import sleep
 from typing import List
 
+import requests
 from selenium import webdriver
-from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
+from selenium.common import TimeoutException, InvalidSessionIdException
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException, NoSuchElementException
+from selenium.webdriver.support.ui import WebDriverWait
+
 from bot import send_message
-import logging
+from lesson_map import practical_lessons, theoretical_lessons, test_lessons
+from model import Slot
 
 # setup logging
 logging.basicConfig(format='%(asctime)s %(message)s', level=logging.INFO)
@@ -23,6 +27,7 @@ class BBDCProcessor:
 
         self._username = config["bbdc"]["username"]
         self._password = config["bbdc"]["password"]
+        self._auto_booking = config["bbdc"].get('auto_book', False)
 
         # bot
         self._bot_token = config["telegram"]["token"]
@@ -33,35 +38,31 @@ class BBDCProcessor:
         chrome_host = config["chromedriver"]["host"]
 
         logging.info(f"connecting to selenium host: {chrome_host}")
+        bbdc = config["bbdc"]
+        self._practical_lesson_target = bbdc.get("practical_lesson_target")
+        self._theory_lesson_target = bbdc.get("theory_lesson_target")
+        self._test_target = bbdc.get("test_target")
+        # todo
         self.browser = webdriver.Remote(
             '{:}/wd/hub'.format(chrome_host), DesiredCapabilities.CHROME)
-
+        self._chrome_host = chrome_host
         self._last_time_report = datetime.now()
-        self.known_days = {}
-        self.known_sessions = {}
-        self.max_days = 2  # don't click the whole month
+        self._known_practical_sessions = set()
+        self._known_theory_sessions = set()
+        self._known_test_sessions = set()
 
+        self._api_call_counter = 0
+        self._refresh_counter = 0
+
+        # todo
         send_message(self._bot_token, self._chat_id,
                      f"[Service Started]\n{datetime.now()}")
-
-
-    def _is_login_page(self) -> bool:
-        if self.browser.current_url.startswith("https://booking.bbdc.sg/#/login"):
-            return True
-        if len(self.browser.find_elements(By.ID, 'input-8')) > 0:
-            return True
-        return False
 
     def run(self):
         try:
             logging.info("login...")
             self._login()
-
-            logging.info(f"open practical tab...")
-            self._open_practical_tab()
-
-            logging.info(f"open slots...")
-            self._open_slots()
+            sleep(15)
 
         except Exception as e:
             logging.exception(e)
@@ -71,42 +72,29 @@ class BBDCProcessor:
             # parse calendar every 30-150 seconds and send message if new slots are available
         while True:
             try:
-                # report with new days
-                logging.info("parsing calendar...")
-                days = self._get_new_available_days()
-                logging.info(f"New days found: {days}")
+                self._send_health_report()
 
-                header = self._get_lesson_name()
-                logging.info(f"choose lesson: {header}")
+                self._find_practical_slots()
+                sleep(random.randint(5, 30))
 
-                if len(days) > 0:
-                    send_message(self._bot_token, self._chat_id, f"{header} \n New days found: {days}")
+                self._find_theory_slots()
+                sleep(random.randint(5, 30))
 
-                # detailed report with new slots
-                slots = self._get_new_available_slots()
-                logging.info(f"New slots found: {slots}")
-                if len(slots) > 0:
-                    send_message(self._bot_token, self._chat_id, f"{header} \n New slots found:\n{''.join(slots)}")
-                    self._last_time_report = datetime.now()
+                self._find_test_slots()
 
-                if len(days) == 0 and len(slots) == 0:
-                    logging.info("no new slots found")
-
-                if datetime.now() > self._last_time_report + timedelta(minutes=30):
-                    logging.info("no new slots found for 30 minutes, send health report...")
-                    send_message(self._bot_token, self._chat_id,
-                                 f"[Health report]\n{header} \n no new slots found for 30 minutes")
-                    self._last_time_report = datetime.now()
-
-                logging.info("wait for 30-150 seconds before refresh...")
-                sleep(random.randint(30, 150))
-                logging.info("refreshing...")
-                self.browser.refresh()
-
+                self._smart_sleep()
+                self._refresh_browser()
+            except InvalidSessionIdException:
+                logging.error("browser session is invalid, restart browser session...")
+                self.browser = webdriver.Remote(
+                    '{:}/wd/hub'.format(self._chrome_host), DesiredCapabilities.CHROME)
+                self.run()
             except Exception as e:
+                logging.error(
+                    f"error in main loop, after  {self._api_call_counter} api calls and {self._refresh_counter} refreshes")
                 logging.exception(e)
                 send_message(self._bot_token, self._chat_id, f"[Error]\n{str(e)}\nrefresh and sleep 60 seconds...")
-                self.browser.refresh()
+                self._refresh_browser()
                 sleep(60)
                 if self._is_login_page():
                     # todo put this logic to function, rerun run from scratch
@@ -114,8 +102,248 @@ class BBDCProcessor:
                     sleep(240)
                     self.run()
 
+    def _find_practical_slots(self):
+        if self._practical_lesson_target is None:
+            return
+        logging.info(f"find practical slots,  {self._api_call_counter} api call")
+        url = "https://booking.bbdc.sg/bbdc-back-service/api/booking/c2practical/listPracSlotReleased"
+
+        payload = practical_lessons[self._practical_lesson_target]
+        available_slots = self._find_slots(payload, url)
+
+        for i in available_slots:
+            i.type = "practical"
+            i.lesson_name = self._practical_lesson_target
+
+        logging.info(f"found {len(available_slots)} practical slots")
+        self._notify_about_new_slots(available_slots, "practical")
+
+        self._book_first_new_slot(available_slots)
+
+    def _find_theory_slots(self):
+        if self._theory_lesson_target is None:
+            return
+
+        logging.info(f"find theory slots,  {self._api_call_counter} api call")
+
+        url = "https://booking.bbdc.sg/bbdc-back-service/api/booking/theory/listTheoryLessonByDate"
+        payload = theoretical_lessons[self._theory_lesson_target]
+        available_slots = self._find_slots(payload, url)
+
+        for i in available_slots:
+            i.type = "theory"
+            i.lesson_name = self._theory_lesson_target
+
+        logging.info(f"found {len(available_slots)} theory slots")
+        self._notify_about_new_slots(available_slots, "theory")
+
+    def _find_test_slots(self):
+        if self._test_target is None:
+            return
+
+        logging.info(f"find test slot,  {self._api_call_counter} api call")
+
+        url = "https://booking.bbdc.sg/bbdc-back-service/api/booking/test/listTheoryTestSlotWithMaxCap"
+        payload = test_lessons[self._test_target]
+        available_slots = self._find_slots(payload, url)
+
+        for i in available_slots:
+            i.type = "test"
+            i.lesson_name = self._test_target
+
+        logging.info(f"found {len(available_slots)} test slots")
+        self._notify_about_new_slots(available_slots, "test")
+
+    def _find_slots(self, payload, url):
+        self._api_call_counter += 1
+
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.5 Safari/605.1.15\'',
+            'JSESSIONID': f'Bearer {self._get_jsession_id()}',
+            'Cookie': f'bbdc-token=Bearer%20{self._get_auth_token()}',
+            'Authorization': f'Bearer {self._get_auth_token()}',
+            'Content-Type': 'application/json'
+        }
+        response = requests.request("POST", url, headers=headers, json=payload)
+        response = response.json()
+        available_slots = self._parse_available_slots_in_api_response(response)
+        if len(available_slots) < 4:  # < -1 - never search next month,
+            # == 0 - search next month only if current empty,
+            # < n - search next month if current has fewer slots than n
+            logging.warning(f"only {len(available_slots)} slots, search next month")
+            payload['releasedSlotMonth'] = (datetime.now() + timedelta(days=30)).strftime("%Y%m")
+            logging.warning(f"no available slots, search next month: {payload['releasedSlotMonth']}")
+            response = requests.request("POST", url, headers=headers, json=payload)
+            response = response.json()
+            next_month_slots = self._parse_available_slots_in_api_response(response)
+            available_slots.extend(next_month_slots)
+
+        return available_slots
+
+    def _notify_about_new_slots(self, slots: List[Slot], lesson_type: str):
+        if lesson_type == "practical":
+            known_sessions = self._known_practical_sessions
+        elif lesson_type == "theory":
+            known_sessions = self._known_theory_sessions
+        elif lesson_type == "test":
+            known_sessions = self._known_test_sessions
+
+        new_slots = []
+        prefix = "found slot"
+        for s in slots:
+            if s not in known_sessions:
+                prefix = "!new slot"
+                new_slots.append(s)
+            logging.info(f"{prefix}: {s}, id: {s.id}")
+
+        logging.info(f"found {len(new_slots)} new {lesson_type} slots")
+        if len(new_slots) > 0:
+            max_slots_per_message = 12  # to avoid long lists with far away slots
+            new_slots.sort(key=lambda x: x.start_time)
+            new_slots = new_slots[:max_slots_per_message]
+            self._last_time_report = datetime.now()
+            body = '\n'.join([str(s) for s in new_slots])
+            send_message(self._bot_token, self._chat_id, f"[New slot]\n{body}")
+
+        known_sessions.clear()
+        known_sessions.update(set(slots))
+
+    @staticmethod
+    def _parse_available_slots_in_api_response(slots: dict):
+        available_slots = []
+        slots_by_date = slots['data']['releasedSlotListGroupByDay']
+
+        if slots_by_date is None:
+            return []
+
+        for date_str, slots in slots_by_date.items():
+            for slot in slots:
+                if slot['bookingProgress'] == 'Available':
+                    day = datetime.strptime(slot['slotRefDate'], '%Y-%m-%d %H:%M:%S')
+
+                    start_time = datetime.strptime(slot['startTime'], "%H:%M")
+                    start_time = day + timedelta(hours=start_time.hour, minutes=start_time.minute)
+
+                    end_time = datetime.strptime(slot['endTime'], "%H:%M")
+                    end_time = day + timedelta(hours=end_time.hour, minutes=end_time.minute)
+
+                    available_slots.append(Slot(
+                        slot['slotId'],
+                        slot['slotRefName'],
+                        start_time,
+                        end_time,
+                        slot['slotIdEnc'],
+                        slot['bookingProgressEnc']
+                    ))
+        return available_slots
+
+    def _book_first_new_slot(self, slots: List[Slot]):
+        if len(slots) == 0:
+            return
+
+        if self._auto_booking is False:
+            return
+
+        slots.sort(key=lambda x: x.start_time)
+
+        for slot in slots:
+            # skip far slots
+            if slot.start_time - datetime.now() > timedelta(days=5):
+                logging.warning(f"slot {slot} is too far, skip")
+                return  # slots are sorted by date, so we can stop here
+
+            # skip early morning or late night slots
+            if slot.start_time.hour < 9 or slot.start_time.hour > 20:
+                logging.warning(f"slot {slot} is too early or late, skip")
+                continue
+
+            # skip eng lessons, tuesday and friday 6pm-7pm, you can set skip your working hours here
+            if (slot.start_time.isoweekday() == 2 or slot.start_time.isoweekday() == 5) \
+                    and slot.start_time.time() < time(19, 00) and time(18, 00) < slot.end_time.time():
+                logging.warning(f"slot {slot} slot intersects with eng lesson, skip")
+                continue
+
+            # # force book
+            # if 9 <= slot.start_time.hour < 12 and slot.start_time - datetime.now() < timedelta(
+            #         hours=3):  # todo book 9-11:30 slot anyway 3h in advance
+            #     send_message(self._bot_token, self._chat_id, f"!!! book non canceled slot {slot}")
+            #     self._book_slot(slot)
+            #     return
+
+            # skip non-cancelable slots, but notify additionally in telegram
+            if slot.start_time - datetime.now() < timedelta(hours=24):
+                logging.warning(f"slot {slot} is too close, skip and notify")
+                send_message(self._bot_token, self._chat_id, f"slot {slot} is too early or late, skip")
+                continue
+
+            # book slot
+            send_message(self._bot_token, self._chat_id, f"book slot {slot}")
+            self._book_slot(slot)
+            return
+
+    def _book_slot(self, slot):
+        self._api_call_counter += 1
+        logging.info(f"book practical slots,  {self._api_call_counter} api call")
+        url = "https://booking.bbdc.sg/bbdc-back-service/api/booking/c2practical/callBookPracticalSlot"
+        payload = {"courseType": "2B",
+                   "slotIdList": [slot.id],
+                   "encryptSlotList": [
+                       {
+                           "slotIdEnc": slot.id_enc,
+                           "bookingProgressEnc": slot.booking_progress_enc
+                       }],
+                   "insInstructorId": "",
+                   "subVehicleType": "Circuit"}  # todo check road for road
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.5 Safari/605.1.15\'',
+            'JSESSIONID': f'Bearer {self._get_jsession_id()}',
+            'Cookie': f'bbdc-token=Bearer%20{self._get_auth_token()}',
+            'Authorization': f'Bearer {self._get_auth_token()}',
+            'Content-Type': 'application/json'
+        }
+        response = requests.request("POST", url, headers=headers, json=payload)
+        logging.info(f"booking response: {response}")
+        logging.info(f"booking body response: {response.json()}")
+        self._auto_booking = False
+
+    def _is_login_page(self) -> bool:
+        if self.browser.current_url.startswith("https://booking.bbdc.sg/#/login"):
+            return True
+        if len(self.browser.find_elements(By.ID, 'input-8')) > 0:
+            return True
+        return False
+
+    @staticmethod
+    def _smart_sleep():
+        # Get the current date and time in the Singapore time zone
+        sg_timezone = timezone(timedelta(hours=8))
+        now = datetime.now(tz=sg_timezone)
+        hour = now.hour
+
+        # Sleep for 15-45 minutes between 1 AM and 5 AM Singapore time
+        if 2 <= hour < 5:
+            sleep_time = random.randint(2700, 3600)  # 15-45 minutes in seconds
+        else:
+            sleep_time = random.randint(60, 240)  # 1-4 minutes in seconds
+
+        # Sleep for the calculated amount of time
+        logging.info(f"Wait for {sleep_time} seconds...")
+        sleep(sleep_time)
+
+    def _refresh_browser(self):
+        self._refresh_counter += 1
+        self.browser.refresh()
+
+    def _send_health_report(self):
+        health_report_timing = 60
+        if datetime.now() > self._last_time_report + timedelta(minutes=health_report_timing):
+            logging.info(f"no new slots found for {health_report_timing} minutes, send health report...")
+            send_message(self._bot_token, self._chat_id,
+                         f"[Health report]\n no new slots found for {health_report_timing} minutes")
+            self._last_time_report = datetime.now()
+
     def _login(self):
-        self.browser.get('https://booking.bbdc.sg/#/login?redirect=%2Fbooking%2Findex')
+        self.browser.get('https://booking.bbdc.sg/#/login')
 
         # Wait for the login form to be loaded
         wait = WebDriverWait(self.browser, 10)
@@ -129,105 +357,31 @@ class BBDCProcessor:
         login_button.click()
         self.browser.switch_to.default_content()
 
-    def _open_practical_tab(self):
-        logging.info("waiting practical button to be clickable")
-        sleep(30)
-        wait = WebDriverWait(self.browser, 30)
-        practical = wait.until(
-            EC.element_to_be_clickable((
-                By.XPATH,
-                '//*[@id="app"]/div/div/main/div/div/div[2]/div/div[1]/div/div/div[1]/div/div[2]/div/div[2]')))
-        logging.info("click practical button")
-        practical.click()
-
-    def _open_slots(self):
-        logging.info("waiting booking button to be clickable")
-        sleep(30)
-        wait = WebDriverWait(self.browser, 10)
-        wait.until(EC.presence_of_element_located((By.XPATH,
-                                                   '//button[@class="v-btn v-btn--is-elevated v-btn--has-bg theme--light v-size--default primary"]')))
-        logging.info("click booking button")
-        book_next = self.browser.find_elements(By.XPATH,
-                                               '//button[@class="v-btn v-btn--is-elevated v-btn--has-bg theme--light v-size--default primary"]')[
-            -1]
-        book_next.click()
-        sleep(10)
-
-        # if have booked lesson, click continue
-        try:
-            continue_button = self.browser.find_element(By.XPATH,
-                                                        '/html/body/div[1]/div[3]/div/div/div[2]/button[2]')
-            continue_button.click()
-        except NoSuchElementException:
-            logging.info("No continue button")
-
-    def _get_new_available_slots(self) -> List[str]:
-        sleep(20)  # todo find element for wait
-        sessions = self.browser.find_elements(By.CLASS_NAME, 'sessionList')
-        new_known_sessions = {}
-        sessions_to_notify = []
-        for s in sessions:
-            if s.text == '':  # skip empty blocks
-                continue
-            date = s.text.splitlines()[0]
-            for card in s.find_elements(By.CLASS_NAME, 'sessionCard'):
-                if card.text == '':
-                    continue
-
-                name, time, cost = card.text.splitlines()
-                logging.info(f"Session found: {date} {time}")
-                if f'{date} {time}' not in self.known_sessions:
-                    self.known_sessions[f'{date} {time}'] = True
-                    logging.warning(f"[NEW] New session found: {date} {time}")
-                    sessions_to_notify.append(f"{date} {time}\n")
-                new_known_sessions[f'{date} {time}'] = True
-
-        # refresh known sessions
-        self.known_sessions.clear()
-        self.known_sessions.update(new_known_sessions)
-        return sessions_to_notify
-
-    def _get_new_available_days(self) -> List[str]:
-        wait = WebDriverWait(self.browser, 10)
-        calendar = wait.until(
-            EC.presence_of_element_located((By.XPATH,
-                                            '/html/body/div[1]/div/div/main/div/div/div[2]/div/div[2]/div[1]/div[1]/div[1]/div[4]/div/div/div')))
-        days_to_notify = []
-        new_known_days = {}
-        sleep(5)
-        available_days = calendar.find_elements(By.CLASS_NAME, 'v-btn__content')
-        logging.info(f"days to check: {available_days}")
-
-        # todo selenium bug, it doesn't click in days after refresh
-        if len(available_days) == 0:
-            logging.warning("No available days")
-            return []
-
-        for i, day in enumerate(available_days):
-            logging.info(f"Day found: {day.text}")
-            new_known_days[day.text] = True
-            if day.text not in self.known_days:
-                days_to_notify.append(day.text)
-                logging.warning(f"[NEW] New day found: {day.text}")
-            day.click()
-
-            if i >= self.max_days:
+    def _get_auth_token(self) -> str:
+        self.browser.get_cookies()
+        for cookie in self.browser.get_cookies():
+            if cookie['name'] == 'bbdc-token':
+                token_header = cookie['value']
                 break
-            sleep(random.randint(2, 4))
 
-        # refresh known days
-        self.known_days.clear()
-        self.known_days.update(new_known_days)
-        return days_to_notify
+        _, auth_token = token_header.split("%20")
+        return auth_token
 
-    def _get_lesson_name(self) -> str:
+    def _get_jsession_id(self) -> str:
         try:
-            lesson_title = self.browser.find_element(By.XPATH, '//p[@class="title title-blue d-none d-md-block"]')
-            lesson_title = lesson_title.text
-            if lesson_title == "":
-                logging.warning("No header for the lesson")
-            return lesson_title
+            wait = WebDriverWait(self.browser, 60)
+            wait.until(EC.visibility_of_element_located((By.ID, 'app')))
+        except TimeoutException:
+            # try to refresh the browser and take second attempt to get jsessionid,
+            # if the second attempt doesn't help, raise exception
+            logging.error("timeout waiting for jsessionid")
+            self.browser.save_screenshot(f"{datetime.now()}__screenshot.png")
+            self.browser.refresh()
+            wait = WebDriverWait(self.browser, 60)
+            wait.until(EC.visibility_of_element_located((By.ID, 'app')))
 
-        except NoSuchElementException:
-            logging.info("No header for the lesson")
-            return "Unknow lesson name"
+        res = self.browser.execute_script("return window.localStorage;")
+        jsession = json.loads(res.get("vuex"))['user']['authToken']
+        _, jsessionid = jsession.split(" ")
+
+        return jsessionid
