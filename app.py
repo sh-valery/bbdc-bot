@@ -14,7 +14,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
 from bot import send_message
-from lesson_map import practical_lessons, theoretical_lessons, test_lessons
+from lesson_map import practical_lessons, theoretical_lessons
 from model import Slot
 
 # setup logging
@@ -142,9 +142,22 @@ class BBDCProcessor:
             return
 
         logging.info(f"find test slot,  {self._api_call_counter} api call")
+        if self._test_target == "RTP":
+            url = "https://booking.bbdc.sg/bbdc-back-service/api/booking/test/listPracticalTestSlotReleased"
+            payload = {"courseType": "2B",
+                       "vehicleType": "Road",
+                       "viewOnly": "true"
+                       }
+        elif self._test_target == "RTT":
+            url = "https://booking.bbdc.sg/bbdc-back-service/api/booking/test/listTheoryTestSlotWithMaxCap"
+            payload = {"courseType": "2B",
+                       "language": "English",
+                       "testType": "RTT",
+                       "viewOnly": "true"
+                       },
+        else:
+            raise Exception("unknown test target, supports RTP and RTT only")
 
-        url = "https://booking.bbdc.sg/bbdc-back-service/api/booking/test/listTheoryTestSlotWithMaxCap"
-        payload = test_lessons[self._test_target]
         available_slots = self._find_slots(payload, url)
 
         for i in available_slots:

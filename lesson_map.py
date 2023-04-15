@@ -6,20 +6,14 @@ practical_lessons = {
         "subVehicleType": "Circuit",
         "stageSubNo": "RC"
     },
-    "6.01": {
+    "RR": {
         "courseType": "2B",
         "insInstructorId": "",
-        "stageSubDesc": "Subject 6.1",
+        "stageSubDesc": "Road Revision",
         "subVehicleType": "Road",
-        "stageSubNo": "6.01"
+        "stageSubNo": "RR"
     },
-    "7.01": {
-        "courseType": "2B",
-        "insInstructorId": "",
-        "stageSubDesc": "Subject 7.1",
-        "subVehicleType": "Road",
-        "stageSubNo": "7.01"
-    },
+
     "3.01": {
         "courseType": "2B",
         "insInstructorId": "",
@@ -40,6 +34,48 @@ practical_lessons = {
         "stageSubDesc": "Subject 4.1",
         "subVehicleType": "Circuit",
         "stageSubNo": "4.01"
+    },
+    "4.02": {
+        "courseType": "2B",
+        "insInstructorId": "",
+        "stageSubDesc": "Subject 4.2",
+        "subVehicleType": "Circuit",
+        "stageSubNo": "4.02"
+    },
+    "5.01": {
+        "courseType": "2B",
+        "insInstructorId": "",
+        "stageSubDesc": "Subject 5.1",
+        "subVehicleType": "Circuit",
+        "stageSubNo": "5.01"
+    },
+    "5.02": {
+        "courseType": "2B",
+        "insInstructorId": "",
+        "stageSubDesc": "Subject 5.2",
+        "subVehicleType": "Circuit",
+        "stageSubNo": "5.02"
+    },
+    "6.01": {
+        "courseType": "2B",
+        "insInstructorId": "",
+        "stageSubDesc": "Subject 6.1",
+        "subVehicleType": "Road",
+        "stageSubNo": "6.01"
+    },
+    "7.01": {
+        "courseType": "2B",
+        "insInstructorId": "",
+        "stageSubDesc": "Subject 7.1",
+        "subVehicleType": "Road",
+        "stageSubNo": "7.01"
+    },
+    "8.01": {
+        "courseType": "2B",
+        "insInstructorId": "",
+        "stageSubDesc": "Subject 8.1",
+        "subVehicleType": "Road",
+        "stageSubNo": "8.01"
     }
 }
 
@@ -48,7 +84,7 @@ theoretical_lessons = {
              "theoryType": "PPL",
              "stageSubNo": "1.02",
              "language": "English"
-    },
+             },
     "PPL3": {
         "courseType": "2B",
         "language": "English",
@@ -57,11 +93,3 @@ theoretical_lessons = {
     }
 }
 
-test_lessons = {
-    "RTT": {
-        "courseType": "2B",
-        "language": "English",
-        "testType": "RTT",
-        "viewOnly": "true"
-    }
-}
