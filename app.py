@@ -164,6 +164,7 @@ class BBDCProcessor:
             'Authorization': f'Bearer {self._get_auth_token()}',
             'Content-Type': 'application/json'
         }
+        payload.pop('releasedSlotMonth', None)
         response = requests.request("POST", url, headers=headers, json=payload)
         response = response.json()
         available_slots = self._parse_available_slots_in_api_response(response)
